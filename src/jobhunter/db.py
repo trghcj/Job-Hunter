@@ -119,6 +119,16 @@ class LlmUsage(Base):
     calls: Mapped[int | None] = mapped_column(Integer, server_default="0")
 
 
+class ApiUsage(Base):
+    """Calls per day per rate-limited API, so runs stop before free-tier caps."""
+
+    __tablename__ = "api_usage"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    provider: Mapped[str] = mapped_column(Text, primary_key=True)
+    calls: Mapped[int] = mapped_column(Integer, server_default="0")
+
+
 class SearchProfile(Base):
     """What to search for. Edited on the settings page; read by every run."""
 

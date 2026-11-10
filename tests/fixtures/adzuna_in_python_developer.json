@@ -1,0 +1,157 @@
+{
+  "__CLASS__": "Adzuna::API::Response::JobSearchResults",
+  "mean": 1431666.67,
+  "count": 97,
+  "results": [
+    {
+      "contract_type": "contract",
+      "adref": "eyJhbGciOiJIUzI1NiJ9.eyJpIjoiNTk2MDUxMjU3MSIsInMiOiJ4bUxXeENUZDhSRzJqdTNVOU11eGRRIn0.KHVmigGUsovSu-S2pQSeD2qkuef4KcRCBfboBxd8myY",
+      "description": "About Us: Based in San Francisco, California, Turing is the world’s leading research accelerator for frontier AI labs and a trusted partner for global enterprises deploying advanced AI systems. Turing supports customers in two ways: first, by accelerating frontier research with high-quality data, advanced training pipelines, plus top AI researchers who specialize in software engineering, logical reasoning, STEM, multilinguality, multimodality, and agents; and second, by applying that expertise …",
+      "location": {
+        "display_name": "Bangalore, Karnataka",
+        "area": [
+          "India",
+          "Karnataka",
+          "Bangalore"
+        ],
+        "__CLASS__": "Adzuna::API::Response::Location"
+      },
+      "company": {
+        "__CLASS__": "Adzuna::API::Response::Company",
+        "display_name": "Turing"
+      },
+      "id": "5960512571",
+      "redirect_url": "https://www.adzuna.in/details/5960512571?utm_medium=api&utm_source=TESTAPPID",
+      "salary_min": 416000,
+      "__CLASS__": "Adzuna::API::Response::Job",
+      "category": {
+        "__CLASS__": "Adzuna::API::Response::Category",
+        "label": "IT Jobs",
+        "tag": "it-jobs"
+      },
+      "salary_max": 624000,
+      "created": "2026-11-10T21:59:47Z",
+      "salary_is_predicted": "0",
+      "title": "Python Developer"
+    },
+    {
+      "title": "Lead Python Developer",
+      "contract_time": "full_time",
+      "created": "2026-11-10T18:37:29Z",
+      "id": "5960318047",
+      "salary_min": 1000000,
+      "__CLASS__": "Adzuna::API::Response::Job",
+      "description": "Responsibilities Assist with the design and implementation of advanced scraping solutions using Python, Playwright, and AWS services. Automate interactions with JavaScript-heavy and authentication-secured websites, including handling MFA, CAPTCHAs, and session or token-based login flows. Architect scraping pipelines using serverless AWS components such as Lambda, Step Functions, S3, CloudWatch, and Secrets Manager. Build systems that scale to support high volumes of data extraction with fault t…",
+      "longitude": 75.9469,
+      "salary_is_predicted": "0",
+      "latitude": 26.7441,
+      "salary_max": 4000000,
+      "redirect_url": "https://www.adzuna.in/details/5960318047?utm_medium=api&utm_source=TESTAPPID",
+      "category": {
+        "label": "IT Jobs",
+        "tag": "it-jobs",
+        "__CLASS__": "Adzuna::API::Response::Category"
+      },
+      "adref": "eyJhbGciOiJIUzI1NiJ9.eyJpIjoiNTk2MDMxODA0NyIsInMiOiJ4bUxXeENUZDhSRzJqdTNVOU11eGRRIn0.SGXJqm1SfdBW548o5NEtOqQhdlQ7sbiKNg9-yN_yjAE",
+      "location": {
+        "area": [
+          "India",
+          "Rajasthan",
+          "Jaipur"
+        ],
+        "display_name": "Jaipur, Rajasthan",
+        "__CLASS__": "Adzuna::API::Response::Location"
+      },
+      "company": {
+        "__CLASS__": "Adzuna::API::Response::Company",
+        "display_name": "Resources Valley"
+      }
+    },
+    {
+      "created": "2026-11-08T11:16:56Z",
+      "title": "Python Web Developer – Web Scraping / Data Extraction",
+      "contract_time": "full_time",
+      "salary_is_predicted": "0",
+      "location": {
+        "__CLASS__": "Adzuna::API::Response::Location",
+        "area": [
+          "India"
+        ],
+        "display_name": "India"
+      },
+      "company": {
+        "display_name": "Arting Digital Private Limited",
+        "__CLASS__": "Adzuna::API::Response::Company"
+      },
+      "contract_type": "permanent",
+      "description": "This is a remote position. Position: Python Web Developer – Web Scraping / Data Extraction Employment Type: Full-Time Location: Shift Timings: 2:00 PM to 11:00 PM IST Experience: 4–9 Years Key Technical Skills: Strong experience in Python programming. General web development experience. Experience in web scraping and data extraction. Understanding of web crawlers and automated data collection. Experience working with customer websites and extracting structured data. Knowledge of HTML, CSS, Java…",
+      "adref": "eyJhbGciOiJIUzI1NiJ9.eyJpIjoiNTk1NzczNjU5MCIsInMiOiJ4bUxXeENUZDhSRzJqdTNVOU11eGRRIn0.0fIhCD84rX-tyfhWjISzJ3gQTQmfv2W4Y0FN4TOTFdc",
+      "redirect_url": "https://www.adzuna.in/details/5957736590?utm_medium=api&utm_source=TESTAPPID",
+      "category": {
+        "label": "IT Jobs",
+        "tag": "it-jobs",
+        "__CLASS__": "Adzuna::API::Response::Category"
+      },
+      "__CLASS__": "Adzuna::API::Response::Job",
+      "id": "5957736590"
+    },
+    {
+      "created": "2026-11-08T10:48:32Z",
+      "salary_is_predicted": "0",
+      "title": "Senior Python Developer",
+      "adref": "eyJhbGciOiJIUzI1NiJ9.eyJzIjoieG1MV3hDVGQ4UkcyanUzVTlNdXhkUSIsImkiOiI1OTU3NzA2NDAxIn0.KH7Yt4M7wD4ohkIRLQRjtcQWb6M7iIRTYwFmb2saB1Q",
+      "description": "Summary: We are hiring strong Python developers for a network automation initiative. You will build tools and frameworks that inspect telecom network nodes, perform operational actions on Kubernetes workloads, and monitor network availability and health from Layer 1 through Layer 7. The work reduces manual effort in network operations and gives teams real-time, automated visibility into the network. Job Responsibilities: Design, develop and maintain Python-based automation for network and cloud…",
+      "company": {
+        "__CLASS__": "Adzuna::API::Response::Company",
+        "display_name": "Aditi Tech Consulting Private Limited"
+      },
+      "location": {
+        "__CLASS__": "Adzuna::API::Response::Location",
+        "area": [
+          "India",
+          "Karnataka",
+          "Bangalore"
+        ],
+        "display_name": "Bangalore, Karnataka"
+      },
+      "id": "5957706401",
+      "category": {
+        "tag": "it-jobs",
+        "label": "IT Jobs",
+        "__CLASS__": "Adzuna::API::Response::Category"
+      },
+      "__CLASS__": "Adzuna::API::Response::Job",
+      "redirect_url": "https://www.adzuna.in/details/5957706401?utm_medium=api&utm_source=TESTAPPID"
+    },
+    {
+      "salary_is_predicted": "0",
+      "title": "Senior Developer - Python/LLMs/RAG/AI Agents (7-12 years)",
+      "latitude": 12.95703,
+      "created": "2026-11-07T11:56:46Z",
+      "id": "5956585071",
+      "__CLASS__": "Adzuna::API::Response::Job",
+      "category": {
+        "__CLASS__": "Adzuna::API::Response::Category",
+        "tag": "it-jobs",
+        "label": "IT Jobs"
+      },
+      "redirect_url": "https://www.adzuna.in/details/5956585071?utm_medium=api&utm_source=TESTAPPID",
+      "description": "We help the world run better At SAP, we keep it simple: you bring your best to us, and we'll bring out the best in you. We're builders touching over 20 industries and 80% of global commerce, and we need your unique talents to help shape what's next. The work is challenging - but it matters. You'll find a place where you can be yourself, prioritize your wellbeing, and truly belong. What's in it for you? Constant learning, skill growth, great benefits, and a team that wants you to grow and succee…",
+      "adref": "eyJhbGciOiJIUzI1NiJ9.eyJzIjoieG1MV3hDVGQ4UkcyanUzVTlNdXhkUSIsImkiOiI1OTU2NTg1MDcxIn0.gUIDex2R1r_z4-JV_sOMUqISx6HjW8BiMYQr4EJl47o",
+      "company": {
+        "__CLASS__": "Adzuna::API::Response::Company",
+        "display_name": "SAP"
+      },
+      "longitude": 77.59837,
+      "location": {
+        "__CLASS__": "Adzuna::API::Response::Location",
+        "display_name": "Bangalore, Karnataka",
+        "area": [
+          "India",
+          "Karnataka",
+          "Bangalore"
+        ]
+      }
+    }
+  ]
+}
