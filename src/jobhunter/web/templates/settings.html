@@ -22,7 +22,7 @@
 
   <div class="card">
     <h2>What to look for</h2>
-    <label for="titles">Job titles <span class="hint">one per line. "Developer", "Engineer" and "Programmer" count as the same word.</span></label>
+    <label for="titles">Job titles <span class="hint">comma or one per line. "Developer", "Engineer" and "Programmer" count as the same word.</span></label>
     <textarea id="titles" name="titles" rows="6" placeholder="Backend Engineer&#10;Python Developer&#10;AI Engineer">{{ form.titles | join('\n') }}</textarea>
 
     <div class="row">

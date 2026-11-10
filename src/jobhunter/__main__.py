@@ -3,7 +3,7 @@
 import argparse
 import logging
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from alembic import command
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from jobhunter.db import SearchProfile, connect_with_retry, make_engine
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+log = logging.getLogger("jobhunter")
 
 
 def alembic_config(url: str | None = None) -> Config:
@@ -57,7 +58,12 @@ def _email_sender(session: Session):
     key = get_settings().resend_api_key.get_secret_value()
     if not key:
         return None
-    return ResendSender(key, get_setting(session, "digest_from", DEFAULT_FROM) or DEFAULT_FROM)
+    try:
+        from_addr = get_setting(session, "digest_from", DEFAULT_FROM) or DEFAULT_FROM
+    except Exception:  # database unusable: still able to send alerts
+        session.rollback()
+        from_addr = DEFAULT_FROM
+    return ResendSender(key, from_addr)
 
 
 def _deliver(session: Session, digest, now):
@@ -85,6 +91,81 @@ def _deliver(session: Session, digest, now):
     return result
 
 
+def _secrets() -> list[str]:
+    from sqlalchemy.engine import make_url
+
+    from jobhunter.settings import get_settings
+
+    s = get_settings()
+    values = [
+        s.adzuna_app_key.get_secret_value(), s.resend_api_key.get_secret_value(),
+        s.gemini_api_key.get_secret_value(), s.settings_key.get_secret_value(),
+        s.web_password.get_secret_value(), s.session_secret.get_secret_value(),
+    ]
+    for url in (s.database_url, s.test_database_url):
+        try:
+            values.append(make_url(url).password or "")
+        except Exception:
+            pass
+    return [v for v in values if v]
+
+
+def _send_alert(problems: list[str], now: datetime, session: Session | None) -> None:
+    """Best effort: a failing alert must not hide the original problem."""
+    from jobhunter.notify.reports import build_alert, redact
+    from jobhunter.settings import get_settings
+
+    try:
+        clean = [redact(p, _secrets()) for p in problems]
+        to = [a.strip() for a in get_settings().alert_to.split(",") if a.strip()]
+        if not to and session is not None:
+            try:
+                to = _recipients(session)
+            except Exception:
+                session.rollback()
+        sender = _email_sender(session) if session is not None else _email_sender_no_db()
+        if sender is None or not to:
+            log.error("Cannot send failure alert: no Resend key or recipient")
+            return
+        subject, html_body, text_body = build_alert(clean, now)
+        sender.send(to, subject, html_body, text_body)
+        print("failure alert emailed")
+    except Exception as exc:
+        log.error("Failure alert could not be sent: %s", type(exc).__name__)
+
+
+def _email_sender_no_db():
+    from jobhunter.notify.email_resend import ResendSender
+    from jobhunter.settings import get_settings
+
+    key = get_settings().resend_api_key.get_secret_value()
+    return ResendSender(key) if key else None
+
+
+def _maybe_heartbeat(session: Session, now: datetime, force: bool = False) -> bool:
+    from jobhunter.notify import email_resend
+    from jobhunter.notify.email_resend import IST
+    from jobhunter.notify.reports import build_heartbeat, heartbeat_due, weekly_stats
+    from jobhunter.usage import DbBudget
+    from jobhunter.user_settings import get_setting, set_setting
+
+    today = now.astimezone(IST).date()
+    last_raw = get_setting(session, "last_heartbeat")
+    last = date.fromisoformat(last_raw) if last_raw else None
+    if not force and not heartbeat_due(last, today):
+        return False
+    sender, to = _email_sender(session), _recipients(session)
+    if sender is None or not to:
+        return False
+    if not DbBudget(session, {email_resend.PROVIDER: email_resend.LIMITS}).try_spend("resend"):
+        return False
+    subject, html_body, text_body = build_heartbeat(weekly_stats(session, now), now)
+    sender.send(to, subject, html_body, text_body)
+    set_setting(session, "last_heartbeat", today.isoformat())
+    print("weekly heartbeat emailed")
+    return True
+
+
 def cmd_run(_: argparse.Namespace) -> int:
     from jobhunter.pipeline import DEFAULT_MAX_JOBS, run_pipeline
     from jobhunter.settings import get_settings
@@ -92,29 +173,59 @@ def cmd_run(_: argparse.Namespace) -> int:
     from jobhunter.user_settings import get_setting
 
     now = datetime.now(UTC)
-    with _session() as session:
+    problems: list[str] = []
+    session: Session | None = None
+    try:
+        session = _session()
         sources = get_setting(session, "sources", {}) or {}
         digest_cfg = get_setting(session, "digest", {}) or {}
         max_age = int(get_setting(session, "max_age_days", 14))
         adapters = build_adapters(session, get_settings(), sources)
+        if not adapters:
+            problems.append("no job sources are enabled or configured")
         summary = run_pipeline(
             session, adapters, now=now, max_age_days=max_age,
             max_jobs=int(digest_cfg.get("max_jobs", DEFAULT_MAX_JOBS)),
         )
         delivery = _deliver(session, summary.digest, now)
 
-    for s in summary.sources:
-        status = "ok" if s.ok else f"FAILED ({s.error})"
-        print(f"{s.source}: fetched {s.fetched}, new {s.inserted}, {status}")
-    print(f"checked {summary.scored} recent unsent jobs, {summary.passed} passed the filters")
-    if delivery.sent:
-        print(f"digest emailed: {delivery.count} jobs")
-    elif delivery.error:
-        print(f"digest NOT sent: {delivery.error}")
-    else:
-        print("no new jobs, no email sent")
-    ok = all(s.ok for s in summary.sources) and delivery.error is None
-    return 0 if ok else 1
+        for s in summary.sources:
+            status = "ok" if s.ok else f"FAILED ({s.error})"
+            print(f"{s.source}: fetched {s.fetched}, new {s.inserted}, {status}")
+            if not s.ok:
+                problems.append(f"{s.source}: {s.error}")
+        print(f"checked {summary.scored} recent unsent jobs, {summary.passed} passed the filters")
+        if delivery.sent:
+            print(f"digest emailed: {delivery.count} jobs")
+        elif delivery.error:
+            print(f"digest NOT sent: {delivery.error}")
+            problems.append(f"digest email: {delivery.error}")
+        else:
+            print("no new jobs, no email sent")
+
+        try:
+            _maybe_heartbeat(session, now)
+        except Exception as exc:
+            problems.append(f"weekly heartbeat: {type(exc).__name__}: {exc}")
+    except (Exception, SystemExit) as exc:
+        problems.append(f"run crashed: {type(exc).__name__}: {exc}")
+        log.error("Run crashed: %s", type(exc).__name__)
+
+    if problems:
+        print("problems:\n  " + "\n  ".join(problems))
+        _send_alert(problems, now, session)
+    if session is not None:
+        session.close()
+    return 1 if problems else 0
+
+
+def cmd_heartbeat(_: argparse.Namespace) -> int:
+    """Send the weekly heartbeat now (for testing)."""
+    with _session() as session:
+        sent = _maybe_heartbeat(session, datetime.now(UTC), force=True)
+    if not sent:
+        print("Heartbeat not sent: set RESEND_API_KEY and a digest recipient.", file=sys.stderr)
+    return 0 if sent else 1
 
 
 def cmd_set_email(args: argparse.Namespace) -> int:
@@ -188,6 +299,9 @@ def main(argv: list[str] | None = None) -> int:
     email.add_argument("addresses", nargs="+")
     email.set_defaults(func=cmd_set_email)
     sub.add_parser("test-email", help="send a sample digest").set_defaults(func=cmd_test_email)
+    sub.add_parser("heartbeat", help="send the weekly heartbeat now").set_defaults(
+        func=cmd_heartbeat
+    )
     sub.add_parser("backfill").set_defaults(func=cmd_not_yet)
     args = parser.parse_args(argv)
     return args.func(args)

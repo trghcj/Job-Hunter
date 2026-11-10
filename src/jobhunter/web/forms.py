@@ -51,7 +51,7 @@ def parse_form(fields: dict[str, str], work_modes: list[str]) -> tuple[ProfileFo
     """Returns the parsed form (always, so it can be re-shown) and a list of errors."""
     errors: list[str] = []
 
-    titles = parse_lines(fields.get("titles"))
+    titles = parse_lines(fields.get("titles"), commas=True)
     if len(titles) > MAX_TITLES:
         errors.append(f"Use at most {MAX_TITLES} job titles.")
     if any(len(t) > MAX_TITLE_LEN for t in titles):

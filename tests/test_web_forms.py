@@ -24,10 +24,13 @@ def test_parse_lines_with_commas():
     assert parse_lines("Pune, Mumbai\nDelhi", commas=True) == ["Pune", "Mumbai", "Delhi"]
 
 
-def test_titles_keep_commas():
-    form, errors = parse_form(fields(titles="Software Engineer, Backend"), ["remote"])
+def test_titles_split_on_commas_and_lines():
+    form, errors = parse_form(
+        fields(titles="Backend Engineer , Python Engineer , AI Engineer\nData Engineer"),
+        ["remote"],
+    )
     assert not errors
-    assert form.titles == ["Software Engineer, Backend"]
+    assert form.titles == ["Backend Engineer", "Python Engineer", "AI Engineer", "Data Engineer"]
 
 
 def test_valid_form():

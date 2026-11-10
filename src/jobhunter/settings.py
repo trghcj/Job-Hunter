@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     resend_api_key: SecretStr = SecretStr("")
     gemini_api_key: SecretStr = SecretStr("")
     settings_key: SecretStr = SecretStr("")
+    alert_to: str = ""  # optional; failure alerts still reach you when the database is down
     # Settings page (web): single-user login.
     web_password: SecretStr = SecretStr("")
     session_secret: SecretStr = SecretStr("")  # 32+ random characters
