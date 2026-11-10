@@ -1,0 +1,16 @@
+# Optional defaults only. Seeded into the database on first run (Phase 1),
+# then edited in the settings page. Do not put secrets here.
+search_profile:
+  titles: []               # you type these in the app
+  cities: []               # empty = all India
+  work_modes: [onsite, hybrid, remote]
+  min_years: 0
+  max_years: 1
+exclude_words: ["unpaid"]
+digest: {hour_ist: 7, minute: 30, max_jobs: 25}
+min_final_score: 0.55
+sources:
+  adzuna: {enabled: true}
+  gmail_alerts: {enabled: false}
+  greenhouse: {enabled: true}
+llm: {provider: gemini, max_calls_per_run: 30}
