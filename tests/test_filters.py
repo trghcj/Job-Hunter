@@ -159,6 +159,33 @@ def test_experience_dropped(title, description, reason_part):
     assert reason_part in reason
 
 
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Software Engineer II (Backend)",
+        "Software Development Engineer III (Java Backend)",
+        "MTS-2 Software Engineer - Backend",
+        "SDE 2",
+        "Intermediate Backend Engineer, Authorization",
+        "Mid-Level Backend Engineer",
+    ],
+)
+def test_level_titles_dropped_for_freshers(title):
+    ok, reason, _ = check_experience(title, "", min_years=0, max_years=1)
+    assert not ok and reason.startswith("level title")
+
+
+@pytest.mark.parametrize("title", ["Software Engineer I (Backend)", "SDE 1", "Backend Engineer"])
+def test_entry_level_titles_kept(title):
+    ok, _, _ = check_experience(title, "", min_years=0, max_years=1)
+    assert ok
+
+
+def test_level_titles_allowed_for_experienced_search():
+    ok, _, _ = check_experience("Software Engineer II", "", min_years=2, max_years=5)
+    assert ok
+
+
 def test_experience_unstated_kept_with_flag():
     ok, _, unstated = check_experience("Python Developer", "Build APIs.", 0, 1)
     assert ok and unstated

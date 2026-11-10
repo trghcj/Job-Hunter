@@ -101,6 +101,11 @@ _SENIOR = re.compile(
     r"\b(senior|sr|lead|principal|manager|architect|head|director|staff|vp|vice president"
     r"|chief)\b"
 )
+# Level markers that mean roughly 2+ years: "Engineer II", "SDE 3", "MTS-2", "Intermediate".
+_LEVEL = re.compile(
+    r"\b(?:ii|iii|iv)\b|\b(?:sde|mts|engineer|developer)[- ]?[2-9]\b"
+    r"|\b(?:intermediate|mid[- ]level|experienced)\b"
+)
 _ENTRY = re.compile(
     r"\b(freshers?|entry[- ]level|graduates?|trainee|junior|jr|associate|new grad|campus)\b"
 )
@@ -140,6 +145,8 @@ def check_experience(
     title_l = title.lower()
     if max_years < SENIOR_TITLE_MAX_YEARS and (m := _SENIOR.search(title_l)):
         return False, f"senior title ({m.group(1)})", False
+    if max_years < SENIOR_TITLE_MAX_YEARS and (m := _LEVEL.search(title_l)):
+        return False, f"level title ({m.group(0)})", False
 
     text = f"{title_l} {(description or '').lower()}"
     mentions = _experience_mentions(text)

@@ -10,13 +10,14 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     database_url: str = ""
+    test_database_url: str = ""  # local Postgres for DB tests; never the hosted database
     adzuna_app_id: str = ""
     adzuna_app_key: SecretStr = SecretStr("")
     resend_api_key: SecretStr = SecretStr("")
     gemini_api_key: SecretStr = SecretStr("")
     settings_key: SecretStr = SecretStr("")
 
-    @field_validator("database_url")
+    @field_validator("database_url", "test_database_url")
     @classmethod
     def use_psycopg_driver(cls, url: str) -> str:
         return normalize_db_url(url)

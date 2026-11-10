@@ -43,4 +43,4 @@ def test_db_url_normalized_to_psycopg(url):
 
 
 def test_unimplemented_commands_exit_cleanly():
-    assert main(["run"]) == 2
+    assert main(["backfill"]) == 2
