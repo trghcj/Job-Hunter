@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Settings · JobHunter{% endblock %}
+{% block body %}
+<header>
+  <h1>JobHunter settings</h1>
+  <form method="post" action="/logout">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="link" type="submit">Sign out</button>
+  </form>
+</header>
+
+{% if saved %}<div class="msg ok">Saved. The next daily run uses these settings.</div>{% endif %}
+{% if errors %}
+<div class="msg bad">{% for e in errors %}<div>{{ e }}</div>{% endfor %}</div>
+{% endif %}
+{% if not form.titles %}
+<div class="msg bad">No job titles yet, so the daily run will not search for anything.</div>
+{% endif %}
+
+<form method="post" action="/">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+
+  <div class="card">
+    <h2>What to look for</h2>
+    <label for="titles">Job titles <span class="hint">one per line. "Developer", "Engineer" and "Programmer" count as the same word.</span></label>
+    <textarea id="titles" name="titles" rows="6" placeholder="Backend Engineer&#10;Python Developer&#10;AI Engineer">{{ form.titles | join('\n') }}</textarea>
+
+    <div class="row">
+      <div>
+        <label for="min_years">Minimum years of experience</label>
+        <input id="min_years" name="min_years" type="number" min="0" max="40" value="{{ form.min_years }}" required>
+      </div>
+      <div>
+        <label for="max_years">Maximum years of experience</label>
+        <input id="max_years" name="max_years" type="number" min="0" max="40" value="{{ form.max_years }}" required>
+      </div>
+    </div>
+
+    <label>Work modes</label>
+    <div class="checks">
+      {% for m in modes %}
+      <label><input type="checkbox" name="work_modes" value="{{ m }}" {% if m in form.work_modes %}checked{% endif %}> {{ m | capitalize }}</label>
+      {% endfor %}
+    </div>
+
+    <label for="cities">Cities <span class="hint">comma or one per line; leave empty for all of India. Remote jobs are always kept.</span></label>
+    <textarea id="cities" name="cities" rows="2" placeholder="Bengaluru, Pune">{{ form.cities | join(', ') }}</textarea>
+
+    <label for="exclude_words">Exclude words <span class="hint">jobs containing any of these are dropped</span></label>
+    <textarea id="exclude_words" name="exclude_words" rows="2" placeholder="unpaid, intern">{{ form.exclude_words | join(', ') }}</textarea>
+  </div>
+
+  <div class="card">
+    <h2>Daily email</h2>
+    <label for="digest_to">Send the digest to <span class="hint">comma separated, up to 5</span></label>
+    <input id="digest_to" name="digest_to" type="text" value="{{ form.digest_to | join(', ') }}" placeholder="you@gmail.com">
+    <div class="row">
+      <div>
+        <label for="max_jobs">Jobs per email</label>
+        <input id="max_jobs" name="max_jobs" type="number" min="1" max="100" value="{{ form.max_jobs }}" required>
+      </div>
+      <div>
+        <label for="max_age_days">Ignore jobs older than (days)</label>
+        <input id="max_age_days" name="max_age_days" type="number" min="1" max="60" value="{{ form.max_age_days }}" required>
+      </div>
+    </div>
+  </div>
+
+  <p><button type="submit">Save settings</button></p>
+</form>
+
+<div class="card">
+  <h2>Recent runs</h2>
+  {% if runs %}
+  <table>
+    <tr><th>When (UTC)</th><th>Step</th><th>Result</th><th>Fetched</th><th>New / sent</th></tr>
+    {% for r in runs %}
+    <tr>
+      <td>{{ r.started_at.strftime('%d %b %H:%M') if r.started_at else '' }}</td>
+      <td>{{ r.source }}</td>
+      <td>{% if r.ok %}<span class="ok">ok</span>{% else %}<span class="bad" title="{{ r.error or '' }}">failed</span>{% endif %}</td>
+      <td>{{ r.fetched if r.fetched is not none else '' }}</td>
+      <td>{{ r.inserted if r.inserted is not none else '' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="hint">No runs yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

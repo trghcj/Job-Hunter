@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     resend_api_key: SecretStr = SecretStr("")
     gemini_api_key: SecretStr = SecretStr("")
     settings_key: SecretStr = SecretStr("")
+    # Settings page (web): single-user login.
+    web_password: SecretStr = SecretStr("")
+    session_secret: SecretStr = SecretStr("")  # 32+ random characters
+    web_https_only: bool = True  # secure cookies; set false only for local http testing
 
     @field_validator("database_url", "test_database_url")
     @classmethod
