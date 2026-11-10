@@ -159,7 +159,14 @@ class AppSetting(Base):
 def make_engine(url: str | None = None) -> Engine:
     url = url or get_settings().database_url
     if not url:
-        raise RuntimeError("DATABASE_URL is not set. Copy .env.example to .env and fill it in.")
+        raise SystemExit("DATABASE_URL is not set. Add it to .env.")
+    if not url.startswith("postgresql"):
+        scheme = url.split(":", 1)[0]
+        raise SystemExit(
+            f"DATABASE_URL points to '{scheme}', but JobHunter needs PostgreSQL. A DATABASE_URL "
+            "set in your terminal overrides .env; clear it with `Remove-Item Env:DATABASE_URL` "
+            "(PowerShell) or open a new terminal."
+        )
     return create_engine(url, pool_pre_ping=True)
 
 

@@ -42,5 +42,13 @@ def test_db_url_normalized_to_psycopg(url):
     assert normalize_db_url(url) == "postgresql+psycopg://u:p@h/db"
 
 
+def test_non_postgres_url_is_refused_with_hint():
+    from jobhunter.db import make_engine
+
+    with pytest.raises(SystemExit) as exc:
+        make_engine("sqlite:///zynkup.db")
+    assert "needs PostgreSQL" in str(exc.value) and "Remove-Item Env:DATABASE_URL" in str(exc.value)
+
+
 def test_unimplemented_commands_exit_cleanly():
     assert main(["backfill"]) == 2
