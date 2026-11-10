@@ -3,6 +3,7 @@
 import argparse
 import logging
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 from alembic import command
@@ -41,30 +42,114 @@ def cmd_migrate(_: argparse.Namespace) -> int:
     return 0
 
 
+def _recipients(session: Session) -> list[str]:
+    from jobhunter.user_settings import get_setting
+
+    to = get_setting(session, "digest_to", []) or []
+    return [to] if isinstance(to, str) else list(to)
+
+
+def _email_sender(session: Session):
+    from jobhunter.notify.email_resend import DEFAULT_FROM, ResendSender
+    from jobhunter.settings import get_settings
+    from jobhunter.user_settings import get_setting
+
+    key = get_settings().resend_api_key.get_secret_value()
+    if not key:
+        return None
+    return ResendSender(key, get_setting(session, "digest_from", DEFAULT_FROM) or DEFAULT_FROM)
+
+
+def _deliver(session: Session, digest, now):
+    from jobhunter.db import Run
+    from jobhunter.notify import email_resend
+    from jobhunter.notify.email_resend import DeliveryResult, deliver_digest
+    from jobhunter.pipeline import mark_emailed
+    from jobhunter.usage import DbBudget
+
+    sender = _email_sender(session)
+    if sender is None:
+        result = DeliveryResult(False, error="RESEND_API_KEY is not set") if digest \
+            else DeliveryResult(False)
+    else:
+        budget = DbBudget(session, {email_resend.PROVIDER: email_resend.LIMITS})
+        result = deliver_digest(
+            digest, sender, _recipients(session), budget, now,
+            mark=lambda ids: mark_emailed(session, ids, now),
+        )
+    session.add(Run(
+        source="email", started_at=now, finished_at=datetime.now(UTC),
+        ok=result.error is None, fetched=len(digest), inserted=result.count, error=result.error,
+    ))
+    session.commit()
+    return result
+
+
 def cmd_run(_: argparse.Namespace) -> int:
     from jobhunter.pipeline import DEFAULT_MAX_JOBS, run_pipeline
     from jobhunter.settings import get_settings
     from jobhunter.sources.registry import build_adapters
     from jobhunter.user_settings import get_setting
 
+    now = datetime.now(UTC)
     with _session() as session:
         sources = get_setting(session, "sources", {}) or {}
         digest_cfg = get_setting(session, "digest", {}) or {}
         max_age = int(get_setting(session, "max_age_days", 14))
         adapters = build_adapters(session, get_settings(), sources)
         summary = run_pipeline(
-            session, adapters, max_age_days=max_age,
+            session, adapters, now=now, max_age_days=max_age,
             max_jobs=int(digest_cfg.get("max_jobs", DEFAULT_MAX_JOBS)),
         )
+        delivery = _deliver(session, summary.digest, now)
 
     for s in summary.sources:
         status = "ok" if s.ok else f"FAILED ({s.error})"
         print(f"{s.source}: fetched {s.fetched}, new {s.inserted}, {status}")
     print(f"checked {summary.scored} recent unsent jobs, {summary.passed} passed the filters")
-    print(f"digest: {len(summary.digest)} jobs (email sending arrives in step 6)")
-    for d in summary.digest:
-        print(f"  {d.score:.2f}  {d.title} | {d.company} | {d.location_text} | {d.work_mode}")
-    return 0 if all(s.ok for s in summary.sources) else 1
+    if delivery.sent:
+        print(f"digest emailed: {delivery.count} jobs")
+    elif delivery.error:
+        print(f"digest NOT sent: {delivery.error}")
+    else:
+        print("no new jobs, no email sent")
+    ok = all(s.ok for s in summary.sources) and delivery.error is None
+    return 0 if ok else 1
+
+
+def cmd_set_email(args: argparse.Namespace) -> int:
+    """Temporary until the settings page: where the digest goes."""
+    from jobhunter.user_settings import set_setting
+
+    with _session() as session:
+        set_setting(session, "digest_to", args.addresses)
+    print(f"Digest will be sent to: {', '.join(args.addresses)}")
+    return 0
+
+
+def cmd_test_email(_: argparse.Namespace) -> int:
+    from jobhunter.notify.email_resend import build_digest
+    from jobhunter.pipeline import DigestJob
+
+    now = datetime.now(UTC)
+    sample = DigestJob(
+        job_id=0, title="Sample Backend Engineer (test email)", company="JobHunter",
+        location_text="Bengaluru, Karnataka", work_mode="hybrid", url="https://example.com",
+        salary_text="₹4L–₹6L a year", posted_at=now, source="test", score=1.0,
+    )
+    with _session() as session:
+        sender, to = _email_sender(session), _recipients(session)
+    if sender is None or not to:
+        print("Set RESEND_API_KEY in .env and run `set-email` first.", file=sys.stderr)
+        return 1
+    subject, html_body, text_body = build_digest([sample], now)
+    try:
+        sender.send(to, "[test] " + subject, html_body, text_body)
+    except Exception as exc:
+        print(f"Test email failed: {exc}", file=sys.stderr)
+        return 1
+    print(f"Test email sent to {', '.join(to)}")
+    return 0
 
 
 def cmd_set_titles(args: argparse.Namespace) -> int:
@@ -99,8 +184,11 @@ def main(argv: list[str] | None = None) -> int:
     titles = sub.add_parser("set-titles", help="set job titles (until the settings page)")
     titles.add_argument("titles", nargs="+")
     titles.set_defaults(func=cmd_set_titles)
-    for name in ("test-email", "backfill"):
-        sub.add_parser(name).set_defaults(func=cmd_not_yet)
+    email = sub.add_parser("set-email", help="set digest recipient(s) (until the settings page)")
+    email.add_argument("addresses", nargs="+")
+    email.set_defaults(func=cmd_set_email)
+    sub.add_parser("test-email", help="send a sample digest").set_defaults(func=cmd_test_email)
+    sub.add_parser("backfill").set_defaults(func=cmd_not_yet)
     args = parser.parse_args(argv)
     return args.func(args)
 
