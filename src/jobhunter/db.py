@@ -20,7 +20,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -117,6 +117,33 @@ class LlmUsage(Base):
     day: Mapped[date] = mapped_column(Date, primary_key=True)
     provider: Mapped[str] = mapped_column(Text, primary_key=True)
     calls: Mapped[int | None] = mapped_column(Integer, server_default="0")
+
+
+class SearchProfile(Base):
+    """What to search for. Edited on the settings page; read by every run."""
+
+    __tablename__ = "search_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(Text)
+    titles: Mapped[list[str]] = mapped_column(ARRAY(Text))
+    cities: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")
+    work_modes: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), server_default="{onsite,hybrid,remote}"
+    )
+    min_years: Mapped[int] = mapped_column(SmallInteger, server_default="0")
+    max_years: Mapped[int] = mapped_column(SmallInteger, server_default="1")
+    exclude_words: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")
+    active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+
+
+class AppSetting(Base):
+    """Key/value app settings (digest time, score threshold, sources, llm, watchlist)."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    value: Mapped[object] = mapped_column(JSONB)
 
 
 def make_engine(url: str | None = None) -> Engine:

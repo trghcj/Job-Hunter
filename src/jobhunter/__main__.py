@@ -7,6 +7,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from sqlalchemy.orm import Session
 
 from jobhunter.db import connect_with_retry, make_engine
 
@@ -25,7 +26,11 @@ def cmd_migrate(_: argparse.Namespace) -> int:
     engine = make_engine()
     connect_with_retry(engine)
     command.upgrade(alembic_config(engine.url.render_as_string(hide_password=False)), "head")
-    print("Migrations applied.")
+    from jobhunter.user_settings import seed_defaults
+
+    with Session(engine) as session:
+        seed_defaults(session)
+    print("Migrations applied, defaults seeded.")
     return 0
 
 

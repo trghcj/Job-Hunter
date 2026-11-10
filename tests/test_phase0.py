@@ -30,7 +30,7 @@ def test_migration_creates_all_five_tables_and_indexes():
 
 
 def test_orm_models_cover_same_tables():
-    assert sorted(Base.metadata.tables) == sorted(TABLES)
+    assert sorted(Base.metadata.tables) == sorted([*TABLES, "search_profiles", "app_settings"])
 
 
 @pytest.mark.parametrize(
