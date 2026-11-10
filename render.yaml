@@ -1,0 +1,23 @@
+# Render Blueprint: the JobHunter settings page on Render's free plan.
+# Secrets marked `sync: false` are typed into the Render dashboard, never stored in git.
+services:
+  - type: web
+    name: jobhunter-settings
+    runtime: python
+    plan: free
+    region: singapore
+    branch: main
+    autoDeploy: true
+    # Editable install: templates and config.yaml are read straight from the repo checkout.
+    buildCommand: pip install -e ".[web]"
+    startCommand: uvicorn jobhunter.web.app:create_app --factory --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips "*"
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: DATABASE_URL # Supabase session pooler string (port 5432)
+        sync: false
+      - key: WEB_PASSWORD # login password for the settings page
+        sync: false
+      - key: SESSION_SECRET # signs the login cookie
+        generateValue: true
