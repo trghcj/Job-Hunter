@@ -53,6 +53,25 @@ def _details(job: DigestJob, now: datetime) -> list[str]:
     return [p for p in parts if p]
 
 
+FIT_COLOURS = {"strong": ("#E3EFE2", "#2F6B2C"), "good": ("#FBEBD2", "#7A4A0C"),
+               "weak": ("#EEEAE4", "#5F574D")}
+
+
+def _fit_label(job: DigestJob) -> str | None:
+    return f"{job.level.capitalize()} fit" if job.level and job.reason else None
+
+
+def _fit_html(job: DigestJob) -> str:
+    label = _fit_label(job)
+    if not label:
+        return ""
+    bg, fg = FIT_COLOURS.get(job.level, FIT_COLOURS["weak"])
+    return (f'<div style="font-size:13px;color:#111827;margin-top:4px">'
+            f'<span style="background:{bg};color:{fg};font-weight:700;border-radius:999px;'
+            f'padding:1px 8px;font-size:12px">{html.escape(label)}</span> '
+            f"{html.escape(job.reason)}</div>")
+
+
 def _job_html(job: DigestJob, now: datetime) -> str:
     e = html.escape
     title = e(job.title)
@@ -65,14 +84,17 @@ def _job_html(job: DigestJob, now: datetime) -> str:
         f'<div style="font-size:16px;font-weight:600">{title_html}</div>'
         f'<div style="font-size:14px;color:#111827;margin-top:2px">{e(job.company)}</div>'
         f'<div style="font-size:13px;color:#6b7280;margin-top:2px">{details}</div>'
+        f"{_fit_html(job)}"
         f'<div style="font-size:12px;color:#9ca3af;margin-top:2px">'
-        f"score {job.score:.2f} · via {e(job.source)}</div>"
+        f"{'' if _fit_label(job) else f'score {job.score:.2f} · '}via {e(job.source)}</div>"
         "</td></tr>"
     )
 
 
 def _job_text(job: DigestJob, now: datetime) -> str:
     lines = [f"{job.title} — {job.company}", "  " + " · ".join(_details(job, now))]
+    if label := _fit_label(job):
+        lines.append(f"  {label} · {job.reason}")
     if url := _safe_url(job.url):
         lines.append(f"  {url}")
     return "\n".join(lines)

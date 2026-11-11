@@ -78,11 +78,12 @@ h2 { font-size: 18px; margin: 0 0 12px; }
 /* forms */
 label { display: block; font-weight: 650; margin: 14px 0 6px; }
 .hint { color: var(--muted); font-size: 14px; font-weight: 400; }
-input[type=text], input[type=number], input[type=password], input[type=email], textarea {
+input[type=text], input[type=number], input[type=password], input[type=email], textarea,
+select {
   width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
   background: var(--field); color: var(--ink); font: inherit;
 }
-input:focus, textarea:focus { outline: none; border-color: var(--accent);
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
 textarea { min-height: 96px; resize: vertical; }
 code { font-size: 0.92em; background: color-mix(in srgb, var(--accent) 14%, transparent);
@@ -151,3 +152,15 @@ td form { margin: 0; }
   .usermenu .who { display: none; }
   .topnav { order: 3; flex-basis: 100%; }
 }
+
+/* fit (Phase 4) */
+.msg.info { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--ink); }
+.fit { font-size: 14px; margin: -6px 0 12px; color: var(--ink); }
+.fit .badge { margin-left: 0; margin-right: 6px; text-transform: none; }
+.badge.fit-strong { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok); }
+.badge.fit-good { background: color-mix(in srgb, var(--accent) 26%, transparent); color: var(--ink); }
+.badge.fit-weak { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); }
+.skills .badge { text-transform: none; margin: 2px 4px 2px 0; }
+.upload { margin-bottom: 18px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+label.check { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+label.check input { width: 18px; height: 18px; accent-color: var(--accent); }
