@@ -1,4 +1,5 @@
-"""Accounts: who may sign in, the owner claim, the user cap, and blocking.
+"""Accounts: who may sign in (open, or an invite-only list), the owner claim, admins, the
+user cap, and blocking.
 
 A user is a Google (Firebase) account. User 1 is the owner placeholder created by
 migration 0005; it holds the pre-accounts data until the owner's first sign-in claims it.
@@ -27,8 +28,39 @@ class Identity:
 
 @dataclass(frozen=True)
 class SignIn:
-    outcome: Literal["ok", "blocked", "full"]
+    outcome: Literal["ok", "blocked", "full", "invite-only"]
     user_id: int | None
+
+
+def _norm(email: str | None) -> str:
+    return (email or "").strip().lower()
+
+
+def email_set(text: str) -> frozenset[str]:
+    """A comma-separated list of email addresses, compared without case."""
+    return frozenset(e for e in (_norm(part) for part in (text or "").split(",")) if e)
+
+
+@dataclass(frozen=True)
+class Access:
+    """Who may use this JobHunter (ALLOWED_EMAILS) and who gets the Admin page (ADMIN_EMAILS).
+
+    An empty allowed list means anyone with Google may sign in. The owner is always allowed
+    and always an admin; admins are always allowed.
+    """
+
+    owner_email: str = ""
+    allowed: frozenset[str] = frozenset()
+    admins: frozenset[str] = frozenset()
+
+    def invited(self, email: str | None, is_owner: bool) -> bool:
+        if is_owner or not self.allowed:
+            return True
+        e = _norm(email)
+        return bool(e) and (e in self.allowed or e in self.admins or e == _norm(self.owner_email))
+
+    def is_admin(self, email: str | None, is_owner: bool) -> bool:
+        return is_owner or (bool(_norm(email)) and _norm(email) in self.admins)
 
 
 @dataclass(frozen=True)
@@ -76,14 +108,21 @@ def _on_new_user(session: Session, user_id: int) -> None:
 
 
 def sign_in(session: Session, identity: Identity, owner_email: str, now: datetime,
-            max_users: int = MAX_USERS) -> SignIn:
+            max_users: int = MAX_USERS, access: Access | None = None) -> SignIn:
+    access = access or Access(owner_email=owner_email)
     user = session.scalars(select(User).where(User.firebase_uid == identity.uid)).first()
     if user is not None:
+        if user.blocked:
+            return SignIn("blocked", None)
+        if not access.invited(identity.email, user.is_owner):
+            return SignIn("invite-only", None)
         _touch(user, identity, now)
         session.commit()
-        return SignIn("blocked", None) if user.blocked else SignIn("ok", user.id)
+        return SignIn("ok", user.id)
 
     owner = _claimable_owner(session, identity, owner_email)
+    if owner is None and not access.invited(identity.email, is_owner=False):
+        return SignIn("invite-only", None)
     if owner is not None:
         owner.firebase_uid = identity.uid
         _touch(owner, identity, now)

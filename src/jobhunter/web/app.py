@@ -20,7 +20,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.middleware.sessions import SessionMiddleware
 
-from jobhunter.accounts import Identity, SignIn
+from jobhunter.accounts import Access, Identity, SignIn, email_set
 from jobhunter.extension_tokens import label_from_user_agent
 from jobhunter.settings import Settings, get_settings
 from jobhunter.sources.catalog import SOURCE_LABELS
@@ -61,6 +61,8 @@ class UserInfo:
     name: str | None
     is_owner: bool
     blocked: bool
+    is_admin: bool = False  # the owner, or listed in ADMIN_EMAILS
+    invited: bool = True  # False once removed from ALLOWED_EMAILS
 
 
 class AccountsGateway(Protocol):
@@ -83,22 +85,27 @@ class TokenVerifier(Protocol):
 class DbAccounts:
     """AccountsGateway backed by PostgreSQL (jobhunter.accounts)."""
 
-    def __init__(self, session_factory: sessionmaker[Session], owner_email: str) -> None:
+    def __init__(self, session_factory: sessionmaker[Session], access: Access) -> None:
         self._sessions = session_factory
-        self._owner_email = owner_email
+        self._access = access
 
     def sign_in(self, identity: Identity) -> SignIn:
         from jobhunter import accounts
 
         with self._sessions() as session:
-            return accounts.sign_in(session, identity, self._owner_email, datetime.now(UTC))
+            return accounts.sign_in(session, identity, self._access.owner_email,
+                                    datetime.now(UTC), access=self._access)
 
     def get_user(self, user_id: int) -> UserInfo | None:
         from jobhunter import accounts
 
         with self._sessions() as session:
             u = accounts.get_user(session, user_id)
-            return None if u is None else UserInfo(u.id, u.email, u.name, u.is_owner, u.blocked)
+            if u is None:
+                return None
+            return UserInfo(u.id, u.email, u.name, u.is_owner, u.blocked,
+                            is_admin=self._access.is_admin(u.email, u.is_owner),
+                            invited=self._access.invited(u.email, u.is_owner))
 
 
 def _csrf(request: Request) -> str:
@@ -149,10 +156,12 @@ def create_app(
         sessions = sessionmaker(make_engine())
         key = settings.settings_key.get_secret_value()
         store_factory = store_factory or (lambda uid: UserStore(sessions, uid, key))
-        accounts = accounts or DbAccounts(sessions, settings.owner_email)
+        access = Access(settings.owner_email, email_set(settings.allowed_emails),
+                        email_set(settings.admin_emails))
+        accounts = accounts or DbAccounts(sessions, access)
         jobs_store = jobs_store or JobsStore(sessions)
         admin_store = admin_store or AdminStore(sessions)
-        api = api or DbApi(sessions)
+        api = api or DbApi(sessions, access)
     if verifier is None and not missing:
         verifier = FirebaseVerifier(settings.firebase_project_id)
 
@@ -196,6 +205,9 @@ def create_app(
         if user.blocked:
             request.session.clear()
             return None, _see_other("/blocked")
+        if not user.invited:
+            request.session.clear()
+            return None, _see_other("/invite-only")
         return user, None
 
     @app.get("/healthz")
@@ -252,6 +264,11 @@ def create_app(
     def blocked_page(request: Request):
         return notice(request, "Your account is blocked",
                       "The owner of this JobHunter has blocked your account.")
+
+    @app.get("/invite-only", response_class=HTMLResponse)
+    def invite_only_page(request: Request):
+        return notice(request, "JobHunter is invite-only for now",
+                      "Ask the owner to add your Google account, then sign in again.")
 
     @app.get("/full", response_class=HTMLResponse)
     def full_page(request: Request):
@@ -400,13 +417,13 @@ def create_app(
             return Response("Not found.", status_code=404)
         return _see_other("/settings#extension")
 
-    # ---- admin (owner only; everyone else gets 404)
+    # ---- admin (the owner and ADMIN_EMAILS; everyone else gets 404)
 
     def owner_only(request: Request) -> tuple[UserInfo | None, Response | None]:
         user, early = signed_in(request)
         if early:
             return None, early
-        if not user.is_owner:
+        if not (user.is_owner or user.is_admin):
             return None, Response("Not found.", status_code=404)
         return user, None
 

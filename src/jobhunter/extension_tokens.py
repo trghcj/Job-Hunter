@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from jobhunter.accounts import Access
 from jobhunter.db import ExtensionToken, User
 
 MAX_LABEL = 60
@@ -39,18 +40,21 @@ def create_token(session: Session, user_id: int, label: str) -> str:
     return raw
 
 
-def user_for_token(session: Session, raw: str, now: datetime) -> int | None:
-    """The token's user, or None if unknown, revoked, or the user is blocked."""
+def user_for_token(session: Session, raw: str, now: datetime,
+                   access: Access | None = None) -> int | None:
+    """The token's user, or None if unknown, revoked, blocked, or no longer invited."""
     if not raw:
         return None
     row = session.execute(
-        select(ExtensionToken, User.blocked)
+        select(ExtensionToken, User)
         .join(User, User.id == ExtensionToken.user_id)
         .where(ExtensionToken.token_hash == hash_token(raw))
     ).first()
-    if row is None or row[1]:
+    if row is None:
         return None
-    token = row[0]
+    token, user = row
+    if user.blocked or not (access or Access()).invited(user.email, user.is_owner):
+        return None
     token.last_used_at = now
     session.commit()
     return token.user_id

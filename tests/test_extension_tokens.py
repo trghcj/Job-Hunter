@@ -96,3 +96,12 @@ LINUX_BRAVE = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0.0
 ])
 def test_label_from_user_agent(ua, label):
     assert label_from_user_agent(ua) == label
+
+
+def test_token_of_user_no_longer_invited_is_refused(db_session):
+    from jobhunter.accounts import Access, email_set
+
+    a = new_user(db_session, 1)
+    raw = create_token(db_session, a, "Chrome on Windows")
+    assert user_for_token(db_session, raw, NOW, Access(allowed=email_set("u1@gmail.com"))) == a
+    assert user_for_token(db_session, raw, NOW, Access(allowed=email_set("x@gmail.com"))) is None

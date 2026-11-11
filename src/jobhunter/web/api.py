@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from jobhunter.accounts import Access
 from jobhunter.db import Job, JobScore, JobStatus, User
 from jobhunter.extension_tokens import hash_token, user_for_token
 from jobhunter.models import RawJob
@@ -116,12 +117,14 @@ def _raw_job(info: JobInfo) -> RawJob:
 
 
 class DbApi:
-    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+    def __init__(self, session_factory: sessionmaker[Session],
+                 access: Access | None = None) -> None:
         self._sessions = session_factory
+        self._access = access
 
     def user_for_token(self, raw: str) -> int | None:
         with self._sessions() as session:
-            return user_for_token(session, raw, datetime.now(UTC))
+            return user_for_token(session, raw, datetime.now(UTC), self._access)
 
     def _seen(self, session: Session, user_id: int, dedupe_key: str) -> Seen:
         job_id = session.scalar(select(Job.id).where(Job.dedupe_key == dedupe_key,

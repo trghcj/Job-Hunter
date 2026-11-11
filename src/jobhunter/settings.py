@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     firebase_project_id: str = ""
     firebase_app_id: str = ""
     owner_email: str = ""  # this Google account becomes the owner (admin page, old data)
+    # Comma-separated email lists. ALLOWED_EMAILS empty = anyone with Google may sign in.
+    allowed_emails: str = ""  # invite-only: only these accounts (and the owner)
+    admin_emails: str = ""  # these accounts also get the Admin page
     session_secret: SecretStr = SecretStr("")  # 32+ random characters
     web_https_only: bool = True  # secure cookies; set false only for local http testing
 

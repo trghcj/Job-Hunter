@@ -25,6 +25,10 @@ services:
         sync: false
       - key: OWNER_EMAIL # your Google sign-in email: you become the owner
         sync: false
+      - key: ALLOWED_EMAILS # optional, comma-separated: invite-only (owner always allowed)
+        sync: false
+      - key: ADMIN_EMAILS # optional, comma-separated: these accounts also get Admin
+        sync: false
       - key: FIREBASE_API_KEY # the four public values from Firebase > Project settings
         sync: false
       - key: FIREBASE_AUTH_DOMAIN
