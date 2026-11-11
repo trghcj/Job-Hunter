@@ -222,6 +222,16 @@ def _ran_today(session: Session, now: datetime) -> bool:
     return ran_successfully_today(session, now)
 
 
+def _llm_client(settings):
+    """Gemini for the daily review, or None when GEMINI_API_KEY is not set."""
+    key = settings.gemini_api_key.get_secret_value()
+    if not key:
+        return None
+    from jobhunter.llm.gemini import GeminiClient
+
+    return GeminiClient(key, settings.gemini_model)
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     from jobhunter.mail_account import gmail_adapters
     from jobhunter.pipeline import run_pipeline
@@ -248,7 +258,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                  if is_enabled(sources, "gmail_alerts") else [])
         if not adapters and not gmail:
             problems.append("no job sources are enabled or configured")
-        summary = run_pipeline(session, adapters, gmail, now=now)
+        summary = run_pipeline(session, adapters, gmail, now=now, llm=_llm_client(settings))
 
         for s in summary.sources:
             status = "ok" if s.ok else f"FAILED ({s.error})"
@@ -338,6 +348,17 @@ def cmd_set_titles(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rescore(_: argparse.Namespace) -> int:
+    """Find skills in jobs saved before Phase 4, then re-score every user's jobs."""
+    from jobhunter.pipeline import backfill_job_skills, rescore_all
+
+    with _session() as session:
+        filled = backfill_job_skills(session)
+        users = rescore_all(session, datetime.now(UTC))
+    print(f"Skills found for {filled} job(s); re-scored {users} user(s).")
+    return 0
+
+
 def cmd_not_yet(args: argparse.Namespace) -> int:
     print(f"'{args.command}' is not implemented yet (see the roadmap).", file=sys.stderr)
     return 2
@@ -367,6 +388,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("heartbeat", help="send the weekly heartbeat now").set_defaults(
         func=cmd_heartbeat
     )
+    sub.add_parser("rescore", help="find skills in older jobs and re-score everyone").set_defaults(
+        func=cmd_rescore)
     sub.add_parser("backfill").set_defaults(func=cmd_not_yet)
     args = parser.parse_args(argv)
     return args.func(args)

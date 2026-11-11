@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
 
 from jobhunter.db import Job, JobScore, JobStatus
+from jobhunter.matching.fit import level_of
 from jobhunter.pipeline import status_join, visible_to
 from jobhunter.user_settings import get_user_setting
 
@@ -30,6 +31,8 @@ class JobCard:
     url: str
     status: str
     score: float | None
+    level: str | None = None  # strong / good / weak, once the user has a profile
+    reason: str | None = None  # why it fits
 
 
 class JobsView(Protocol):
@@ -37,9 +40,10 @@ class JobsView(Protocol):
     def set_status(self, user_id: int, job_id: int, status: str) -> bool: ...
 
 
-def _card(job: Job, status: str | None, score: float | None) -> JobCard:
+def _card(job: Job, status: str | None, score: float | None, reason: str | None) -> JobCard:
+    level = level_of(score) if reason and score is not None else None
     return JobCard(job.id, job.title, job.company, job.location_text, job.work_mode or "unknown",
-                   job.source, job.posted_at, job.url, status or "new", score)
+                   job.source, job.posted_at, job.url, status or "new", score, level, reason)
 
 
 class JobsStore:
@@ -49,7 +53,7 @@ class JobsStore:
     def list(self, user_id: int, tab: str, limit: int = 100) -> list[JobCard]:
         with self._sessions() as session:
             if tab in ("saved", "applied"):
-                stmt = (select(Job, JobStatus.status, JobScore.final_score)
+                stmt = (select(Job, JobStatus.status, JobScore.final_score, JobScore.fit_reason)
                         .join(JobStatus, status_join(user_id))
                         .outerjoin(JobScore, and_(JobScore.job_id == Job.id,
                                                   JobScore.user_id == user_id))
@@ -59,7 +63,7 @@ class JobsStore:
                 max_age = int(get_user_setting(session, user_id, "max_age_days",
                                                DEFAULT_MAX_AGE_DAYS))
                 cutoff = datetime.now(UTC) - timedelta(days=max_age)
-                stmt = (select(Job, JobStatus.status, JobScore.final_score)
+                stmt = (select(Job, JobStatus.status, JobScore.final_score, JobScore.fit_reason)
                         .join(JobScore, and_(JobScore.job_id == Job.id,
                                              JobScore.user_id == user_id))
                         .outerjoin(JobStatus, status_join(user_id))
@@ -69,8 +73,8 @@ class JobsStore:
                                    JobStatus.status.not_in(("hidden", "applied"))))
                         .order_by(JobScore.final_score.desc().nulls_last(),
                                   Job.posted_at.desc().nulls_last(), Job.id))
-            return [_card(job, status, score)
-                    for job, status, score in session.execute(stmt.limit(limit))]
+            return [_card(job, status, score, reason)
+                    for job, status, score, reason in session.execute(stmt.limit(limit))]
 
     def set_status(self, user_id: int, job_id: int, status: str) -> bool:
         """False (nothing changed) for an unknown status or a job this user cannot see."""

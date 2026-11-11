@@ -64,6 +64,47 @@
   <p><button type="submit">Save settings</button></p>
 </form>
 
+<div class="card" id="profile">
+  <h2>My profile</h2>
+  <p class="hint">Your resume, used to rank your matches by how well they fit you. Only the text is kept: email addresses, phone numbers and links are removed, and the PDF itself is never stored.</p>
+  {% if profile_message %}<div class="msg ok">{{ profile_message }}</div>{% endif %}
+  {% if profile_errors %}
+  <div class="msg bad">{% for e in profile_errors %}<div>{{ e }}</div>{% endfor %}</div>
+  {% endif %}
+
+  <form method="post" action="/profile/resume" enctype="multipart/form-data" class="upload">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="resume">Upload resume <span class="hint">PDF, up to 2 MB and 10 pages. Replaces the text below.</span></label>
+    <input id="resume" name="resume" type="file" accept="application/pdf,.pdf" required>
+    <p><button type="submit" class="secondary">Upload resume</button></p>
+  </form>
+
+  <form method="post" action="/profile">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="profile_text">Profile text <span class="hint">edit freely, for example add "Looking for: backend roles in Bengaluru"</span></label>
+    <textarea id="profile_text" name="profile_text" rows="10" maxlength="15000" placeholder="Paste your resume text here if the PDF can't be read.">{{ profile.text }}</textarea>
+    {% if profile.skills %}
+    <p class="skills"><span class="hint">Skills found:</span>
+      {% for s in profile.skills %}<span class="badge">{{ s }}</span> {% endfor %}</p>
+    {% endif %}
+    <p><button type="submit">Save profile</button></p>
+  </form>
+
+  <form method="post" action="/profile/options">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="check"><input type="checkbox" name="llm_review" value="1"{% if profile.llm_review %} checked{% endif %}> Let Gemini review my top 10 jobs each day</label>
+    <p class="hint">Off unless you turn it on. Sends your profile text (without contact details or its first line) and those 10 jobs to Google's Gemini, for a sharper fit rating and reason.</p>
+    <label for="digest_fit">Daily email includes</label>
+    <select id="digest_fit" name="digest_fit">
+      {% for value, label in fit_choices %}
+      <option value="{{ value }}"{% if profile.digest_fit == value %} selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <p class="hint">My jobs still shows every match, best fit first.</p>
+    <p><button type="submit" class="secondary">Save choices</button></p>
+  </form>
+</div>
+
 <div class="card" id="extension">
   <h2>Chrome extension</h2>
   <p class="hint">The JobHunter bubble checks the job you have open on LinkedIn, Naukri, Indeed or a company careers page against your filters, and saves it to My jobs.</p>

@@ -22,6 +22,7 @@ web = [
     "python-multipart>=0.0.9",
     "itsdangerous>=2.1",
     "PyJWT[crypto]>=2.8",
+    "pypdf>=4", # reads text from an uploaded resume; the PDF itself is never stored
 ]
 
 [build-system]

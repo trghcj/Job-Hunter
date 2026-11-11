@@ -31,7 +31,6 @@ BUILTIN_PROFILE: dict[str, Any] = {
 }
 BUILTIN_SETTINGS: dict[str, Any] = {
     "digest": {"hour_ist": 7, "minute": 30, "max_jobs": 25},
-    "min_final_score": 0.55,
     "sources": {"adzuna": {"enabled": True}},
     "llm": {"provider": "gemini", "max_calls_per_run": 30},
     "company_watchlist": [],
@@ -55,7 +54,7 @@ def load_defaults(path: Path = DEFAULT_CONFIG) -> tuple[dict[str, Any], dict[str
 
 
 # Settings each user has for themselves (user_settings); everything else is shared.
-USER_KEYS = ("digest", "digest_to", "max_age_days")
+USER_KEYS = ("digest", "digest_to", "max_age_days", "profile", "llm_review", "digest_fit")
 
 
 def seed_defaults(session: Session, path: Path = DEFAULT_CONFIG) -> None:

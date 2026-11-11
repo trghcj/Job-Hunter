@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     adzuna_app_key: SecretStr = SecretStr("")
     resend_api_key: SecretStr = SecretStr("")
     gemini_api_key: SecretStr = SecretStr("")
+    gemini_model: str = "gemini-2.5-flash"
     settings_key: SecretStr = SecretStr("")
     alert_to: str = ""  # optional; failure alerts still reach you when the database is down
     # Web app: Google sign-in through Firebase. These four values are public (they are sent

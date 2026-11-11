@@ -11,6 +11,10 @@
   {% endfor %}
 </nav>
 
+{% if tab == "matches" and not has_profile %}
+<div class="msg info">Upload your resume to rank jobs by fit. <a href="/settings#profile">Add it on Settings</a></div>
+{% endif %}
+
 {% if not cards %}
 <div class="card empty">
   <img src="/static/logo.svg" alt="" width="56" height="56">
@@ -38,6 +42,9 @@
     {% if c.work_mode != "unknown" %} · {{ c.work_mode }}{% endif %}
     · {{ c.source }}{% if c.posted_at %} · posted {{ c.posted_at | ist("%d %b") }}{% endif %}
     {% if c.status in ("saved", "applied") %}<span class="badge">{{ c.status }}</span>{% endif %}</p>
+  {% if c.level %}
+  <p class="fit"><span class="badge fit-{{ c.level }}">{{ c.level|capitalize }} fit</span> {{ c.reason }}</p>
+  {% endif %}
   <div class="actions">
     {% for value, label in (("saved", "Save"), ("applied", "Applied"), ("hidden", "Hide")) %}
     {% if c.status != value %}

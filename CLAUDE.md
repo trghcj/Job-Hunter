@@ -21,6 +21,10 @@ Daily run: GitHub Actions. LLM via an LLMClient interface (Gemini default).
   second, or sends anything to LinkedIn, Naukri or Indeed. Only its service worker holds
   the token and talks to the JobHunter API (/api/v1, bearer token, hashed in the database).
 - Extension tests: `npm test` in extension/ (Node 22, linkedom). No network in tests.
+- Resumes: store only cleaned text (profile.clean_text: no emails, phones, links); never
+  store or log the uploaded PDF. Gemini (llm/) reviews only users who turned it on, at most
+  10 jobs in one call per user per run, never with the profile's first line; job text is
+  untrusted and replies are validated (llm.client.parse_reviews).
 - The Gmail app password is stored only encrypted (crypto.py, SETTINGS_KEY) and is never
   shown on a page, logged, or included in an error message.
 - Respect rate limits: Adzuna max 250 calls/day, Resend max 100 emails/day. Count calls in the database.

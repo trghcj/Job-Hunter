@@ -23,6 +23,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from jobhunter.accounts import Access, Identity, SignIn, email_set
 from jobhunter.extension_tokens import label_from_user_agent
 from jobhunter.notify.email_resend import IST
+from jobhunter.profile import MAX_PDF_BYTES, ProfileError
 from jobhunter.settings import Settings, get_settings
 from jobhunter.sources.catalog import SOURCE_LABELS
 from jobhunter.sources.watchlist import format_watchlist
@@ -51,6 +52,14 @@ def ist(value: datetime | None, fmt: str, missing: str = "") -> str:
 
 TEMPLATES.env.filters["ist"] = ist
 SESSION_DAYS = 30
+FIT_CHOICES = (("strong", "Strong fits only"), ("good", "Good and strong"),
+               ("all", "Everything that passed"))
+PROFILE_NOTICES = {
+    "saved": "Profile saved. Your matches are ranked by it now.",
+    "options": "Choices saved.",
+}
+# Upload size check before the form is parsed: the PDF limit plus room for the other fields.
+MAX_UPLOAD_REQUEST = MAX_PDF_BYTES + 64_000
 GMAIL_NOTICES = {
     "saved": "Gmail saved. Use Test connection to check it.",
     "removed": "Gmail account removed.",
@@ -296,7 +305,8 @@ def create_app(
         tab = request.query_params.get("tab", "matches")
         tab = tab if tab in TABS else "matches"
         ctx = {"csrf": _csrf(request), "user": user, "page": "jobs", "tab": tab, "tabs": TABS,
-               "cards": jobs_store.list(user.id, tab)}
+               "cards": jobs_store.list(user.id, tab),
+               "has_profile": bool(store_factory(user.id).load_profile().text)}
         return TEMPLATES.TemplateResponse(request, "jobs.html", ctx)
 
     @app.post("/jobs/{job_id}/status")
@@ -313,7 +323,8 @@ def create_app(
 
     def render_settings(request: Request, user: UserInfo, store: SettingsStore, form,
                         errors=(), saved=False, status=200, gmail_errors=(),
-                        gmail_message: str | None = None):
+                        gmail_message: str | None = None, profile_errors=(),
+                        profile_message: str | None = None):
         ctx = {
             "csrf": _csrf(request),
             "user": user,
@@ -327,6 +338,10 @@ def create_app(
             "gmail_message": gmail_message,
             "tokens": store.tokens(),
             "runs": store.recent_runs(),
+            "profile": store.load_profile(),
+            "profile_errors": list(profile_errors),
+            "profile_message": profile_message,
+            "fit_choices": FIT_CHOICES,
         }
         return TEMPLATES.TemplateResponse(request, "settings.html", ctx, status_code=status)
 
@@ -338,8 +353,9 @@ def create_app(
         store = store_factory(user.id)
         saved = request.query_params.get("saved") == "1"
         message = GMAIL_NOTICES.get(request.query_params.get("gmail", ""))
+        profile_message = PROFILE_NOTICES.get(request.query_params.get("profile", ""))
         return render_settings(request, user, store, store.load(), saved=saved,
-                               gmail_message=message)
+                               gmail_message=message, profile_message=profile_message)
 
     async def _checked_form(request: Request):
         """(user, posted form) if signed in with a valid CSRF token, else the response."""
@@ -364,6 +380,59 @@ def create_app(
             return render_settings(request, user, store, form, errors, status=400)
         store.save(form)
         return _see_other("/settings?saved=1")
+
+    # ---- profile (resume)
+
+    def profile_error(request: Request, user: UserInfo, store: SettingsStore, message: str):
+        return render_settings(request, user, store, store.load(), profile_errors=[message],
+                               status=400)
+
+    @app.post("/profile")
+    async def save_profile_text(request: Request):
+        user, data, early = await _checked_form(request)
+        if early:
+            return early
+        text = data.get("profile_text")
+        store_factory(user.id).save_profile_text(text if isinstance(text, str) else "")
+        return _see_other("/settings?profile=saved#profile")
+
+    @app.post("/profile/resume")
+    async def upload_resume(request: Request):
+        size = request.headers.get("content-length", "")
+        if size.isdigit() and int(size) > MAX_UPLOAD_REQUEST:
+            user, early = signed_in(request)
+            if early:
+                return early
+            return profile_error(request, user, store_factory(user.id),
+                                 "Resume PDF must be 2 MB or smaller.")
+        user, data, early = await _checked_form(request)
+        if early:
+            return early
+        store = store_factory(user.id)
+        upload = data.get("resume")
+        if upload is None or isinstance(upload, str) or not upload.filename:
+            return profile_error(request, user, store, "Choose a PDF file to upload.")
+        content = await upload.read(MAX_PDF_BYTES + 1)
+        if len(content) > MAX_PDF_BYTES:
+            return profile_error(request, user, store, "Resume PDF must be 2 MB or smaller.")
+        try:
+            store.upload_resume(content)
+        except ProfileError as exc:
+            return profile_error(request, user, store, str(exc))
+        return _see_other("/settings?profile=saved#profile")
+
+    @app.post("/profile/options")
+    async def save_profile_options(request: Request):
+        user, data, early = await _checked_form(request)
+        if early:
+            return early
+        store = store_factory(user.id)
+        try:
+            store.save_profile_options(data.get("llm_review") == "1",
+                                       str(data.get("digest_fit", "")))
+        except ValueError as exc:
+            return profile_error(request, user, store, str(exc))
+        return _see_other("/settings?profile=options#profile")
 
     @app.post("/gmail")
     async def save_gmail(request: Request):

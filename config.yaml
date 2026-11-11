@@ -8,7 +8,6 @@ search_profile:
   max_years: 1
 exclude_words: ["unpaid"]
 digest: {hour_ist: 7, minute: 30, max_jobs: 25}
-min_final_score: 0.55
 sources:
   adzuna: {enabled: true}
   gmail_alerts: {enabled: false}

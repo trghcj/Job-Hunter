@@ -94,6 +94,9 @@ class Job(Base):
     )
     # True while the job is known only from someone's Gmail alerts (see job_owners).
     private: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    # Skills named in the job (matching/skills.py), found once when it is saved.
+    skills: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
+    title_skills: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
 
     __table_args__ = (Index("jobs_first_seen", first_seen_at.desc()),)
 
@@ -125,6 +128,7 @@ class JobScore(Base):
     llm_json: Mapped[dict | None] = mapped_column(JSONB)
     llm_pending: Mapped[bool | None] = mapped_column(Boolean, server_default=text("false"))
     final_score: Mapped[float | None] = mapped_column(REAL)
+    fit_reason: Mapped[str | None] = mapped_column(Text)
     scored_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

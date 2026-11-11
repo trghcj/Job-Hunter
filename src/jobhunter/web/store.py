@@ -1,21 +1,23 @@
 """Reads and writes the web pages' values in PostgreSQL.
 
-UserStore: one signed-in user's own settings, Gmail and run history.
+UserStore: one signed-in user's own settings, profile (resume), Gmail and run history.
 AdminStore: the owner's shared settings (sources, company watchlist) and users.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Protocol
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from jobhunter import accounts, extension_tokens
+from jobhunter import accounts, extension_tokens, profile
 from jobhunter.crypto import CryptoError
 from jobhunter.db import Run, SearchProfile
 from jobhunter.extension_tokens import TokenRow
 from jobhunter.mail_account import MailView, delete_account, gmail_adapter, mail_view, save_account
+from jobhunter.matching.fit import LEVEL_MIN
+from jobhunter.pipeline import refilter_for_user
 from jobhunter.sources.catalog import SOURCE_LABELS, is_enabled
 from jobhunter.sources.gmail_alerts import GmailError
 from jobhunter.sources.watchlist import Company, companies_from_setting, companies_to_setting
@@ -23,6 +25,7 @@ from jobhunter.user_settings import (
     BUILTIN_PROFILE,
     get_setting,
     get_user_setting,
+    load_active_searches,
     seed_user,
     set_setting,
     set_user_setting,
@@ -31,6 +34,17 @@ from jobhunter.web.forms import ProfileForm
 
 DEFAULT_MAX_JOBS = 25
 DEFAULT_MAX_AGE_DAYS = 14
+
+
+@dataclass(frozen=True)
+class ProfileView:
+    """What the My profile card shows."""
+
+    text: str
+    skills: tuple[str, ...]
+    llm_review: bool
+    digest_fit: str
+    updated_at: str | None
 
 
 @dataclass(frozen=True)
@@ -54,6 +68,10 @@ class SettingsStore(Protocol):
     def tokens(self) -> list[TokenRow]: ...
     def create_token(self, label: str) -> str: ...
     def revoke_token(self, token_id: int) -> bool: ...
+    def load_profile(self) -> ProfileView: ...
+    def save_profile_text(self, text: str) -> None: ...
+    def upload_resume(self, data: bytes) -> None: ...
+    def save_profile_options(self, llm_review: bool, digest_fit: str) -> None: ...
 
 
 def _active_profile(session: Session, user_id: int) -> SearchProfile:
@@ -80,6 +98,39 @@ class UserStore:
         self._sessions = session_factory
         self.user_id = user_id
         self._key = settings_key
+
+    # ---- profile (resume text); saving it re-scores this user's jobs at once
+
+    def _rescore(self, session: Session) -> None:
+        searches = load_active_searches(session, self.user_id)
+        if any(s.titles for s in searches):
+            max_age = int(get_user_setting(session, self.user_id, "max_age_days",
+                                           DEFAULT_MAX_AGE_DAYS))
+            refilter_for_user(session, self.user_id, searches, datetime.now(UTC), max_age)
+
+    def load_profile(self) -> ProfileView:
+        with self._sessions() as session:
+            saved = profile.load_profile(session, self.user_id)
+            return ProfileView(saved.text if saved else "", saved.skills if saved else (),
+                               profile.get_flag(session, self.user_id),
+                               profile.digest_fit(session, self.user_id),
+                               saved.updated_at if saved else None)
+
+    def save_profile_text(self, text: str) -> None:
+        with self._sessions() as session:
+            profile.save_profile(session, self.user_id, text, datetime.now(UTC))
+            self._rescore(session)
+
+    def upload_resume(self, data: bytes) -> None:
+        """Raises profile.ProfileError with a message for the user. The PDF is not kept."""
+        self.save_profile_text(profile.pdf_text(data))
+
+    def save_profile_options(self, llm_review: bool, digest_fit: str) -> None:
+        if digest_fit not in LEVEL_MIN:
+            raise ValueError("Pick how many jobs to email you.")
+        with self._sessions() as session:
+            set_user_setting(session, self.user_id, "llm_review", bool(llm_review))
+            set_user_setting(session, self.user_id, "digest_fit", digest_fit)
 
     # ---- Gmail account (password is write-only from the page's point of view)
 
@@ -156,12 +207,15 @@ class UserStore:
             set_user_setting(session, self.user_id, "digest", digest)
             set_user_setting(session, self.user_id, "digest_to", form.digest_to)
             set_user_setting(session, self.user_id, "max_age_days", form.max_age_days)
+            self._rescore(session)
 
     def recent_runs(self, limit: int = 8) -> list[RunRow]:
-        """Shared runs plus this user's own Gmail and email runs; never other users'."""
+        """Shared runs plus this user's own Gmail, email and AI review runs; never other
+        users'."""
         with self._sessions() as session:
-            personal = or_(Run.source.like("gmail_alerts:%"), Run.source.like("email:%"))
-            mine = Run.source.in_((f"gmail_alerts:{self.user_id}", f"email:{self.user_id}"))
+            prefixes = ("gmail_alerts", "email", "llm")
+            personal = or_(*(Run.source.like(f"{p}:%") for p in prefixes))
+            mine = Run.source.in_(tuple(f"{p}:{self.user_id}" for p in prefixes))
             stmt = (select(Run).where(or_(~personal, mine))
                     .order_by(Run.id.desc()).limit(limit))
             return [RunRow(r.source, r.started_at, r.ok, r.fetched, r.inserted, r.error)

@@ -9,6 +9,14 @@
     server: "Something went wrong at JobHunter",
   };
 
+  const FIT_LABELS = { strong: "Strong fit", good: "Good fit", weak: "Weak fit" };
+
+  // "Strong fit · Matches Python, Django" once the user has a profile; else the old text.
+  function matchHeadline(fit) {
+    const label = fit && FIT_LABELS[fit.level];
+    return label && fit.reason ? `${label} · ${fit.reason}` : "Matches your filters";
+  }
+
   function seenText(seen) {
     if (!seen) return null;
     if (seen.status === "applied") return "You applied to this job";
@@ -37,7 +45,7 @@
         return { ...base, headline: state.slow
           ? "Waking up JobHunter, this can take up to a minute…" : "Checking…" };
       case "result": {
-        const { verdict, reasons, seen } = state.result;
+        const { verdict, reasons, seen, fit } = state.result;
         const match = verdict === "match";
         const status = seen && seen.status;
         return {
@@ -45,7 +53,7 @@
           ring: match ? "match" : "nomatch",
           dot: Boolean(seenText(seen)),
           seen: seenText(seen),
-          headline: match ? "Matches your filters"
+          headline: match ? matchHeadline(fit)
             : `Not a match: ${(reasons && reasons[0]) || "outside your filters"}`,
           actions: [
             { id: "save", label: status === "saved" ? "Saved ✓" : "Save to JobHunter",

@@ -77,7 +77,8 @@ def test_check_match(client, api):
     r = client.post("/api/v1/check", json=JOB, headers=AUTH)
     assert r.status_code == 200
     assert r.json() == {"verdict": "match", "reasons": [],
-                        "seen": {"status": "saved", "emailed": True, "listed": True}}
+                        "seen": {"status": "saved", "emailed": True, "listed": True},
+                        "fit": None}
     assert api.checked == [(7, "Backend Engineer")]
 
 

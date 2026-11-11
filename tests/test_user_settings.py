@@ -22,7 +22,7 @@ def test_load_defaults_reads_repo_config():
     assert profile["work_modes"] == ["onsite", "hybrid", "remote"]
     assert (profile["min_years"], profile["max_years"]) == (0, 1)
     assert profile["exclude_words"] == ["unpaid"]
-    assert settings["min_final_score"] == 0.55
+    assert "min_final_score" not in settings  # retired: each user picks a fit level
     assert settings["digest"] == {"hour_ist": 7, "minute": 30, "max_jobs": 25}
     assert settings["company_watchlist"] == []
     assert settings["llm"]["max_calls_per_run"] == 30
@@ -32,7 +32,7 @@ def test_load_defaults_reads_repo_config():
 def test_load_defaults_missing_file_uses_builtins(tmp_path):
     profile, settings = load_defaults(tmp_path / "nope.yaml")
     assert (profile["min_years"], profile["max_years"]) == (0, 1)
-    assert settings["min_final_score"] == 0.55
+    assert "min_final_score" not in settings
 
 
 def test_profile_to_search():

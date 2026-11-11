@@ -8,21 +8,29 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
+from typing import TYPE_CHECKING
 
-from sqlalchemy import ColumnElement, Select, and_, literal_column, or_, select
+from sqlalchemy import ColumnElement, Select, and_, func, literal_column, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from jobhunter.db import Job, JobOwner, JobScore, JobStatus, Run
 from jobhunter.matching.filters import DEFAULT_MAX_AGE_DAYS, FilterResult, apply_filters
+from jobhunter.matching.fit import LEVEL_MIN, blend, level_of, local_fit
+from jobhunter.matching.skills import extract_skills
 from jobhunter.models import RawJob
 from jobhunter.normalize import NormalizedJob, normalize_job
+from jobhunter.profile import digest_fit, load_profile
 from jobhunter.sources.base import Search, SourceAdapter
-from jobhunter.user_settings import active_user_searches, get_user_setting
+from jobhunter.user_settings import active_user_searches, get_setting, get_user_setting
+
+if TYPE_CHECKING:
+    from jobhunter.llm.client import LLMClient
 
 log = logging.getLogger(__name__)
 
 BATCH = 200
+BACKFILL_BATCH = 500
 DEFAULT_MAX_JOBS = 25
 EXPERIENCE_UNSTATED_PENALTY = 0.1
 REMOTE_UNCONFIRMED_PENALTY = 0.1
@@ -49,6 +57,8 @@ class DigestJob:
     posted_at: datetime | None
     source: str
     score: float
+    reason: str | None = None  # why it fits (None until the user has a profile)
+    level: str | None = None  # strong / good / weak
 
 
 @dataclass
@@ -89,7 +99,29 @@ def _job_row(j: NormalizedJob, now: datetime, private: bool) -> dict:
         "first_seen_at": now,
         "last_seen_at": now,
         "private": private,
+        **job_skill_columns(j.raw.title, j.raw.description),
     }
+
+
+def job_skill_columns(title: str, description: str | None) -> dict[str, list[str]]:
+    """The skills a job names (title + description), and those in its title."""
+    title_skills = extract_skills(title)
+    return {"skills": sorted(title_skills | extract_skills(description)),
+            "title_skills": sorted(title_skills)}
+
+
+def backfill_job_skills(session: Session) -> int:
+    """Fill skills for jobs saved before they were recorded. Returns how many."""
+    done = 0
+    while True:
+        rows = session.scalars(select(Job).where(Job.skills.is_(None)).limit(BACKFILL_BATCH)).all()
+        if not rows:
+            return done
+        for job in rows:
+            cols = job_skill_columns(job.title, job.description)
+            job.skills, job.title_skills = cols["skills"], cols["title_skills"]
+        session.commit()
+        done += len(rows)
 
 
 def upsert_jobs(session: Session, jobs: Sequence[NormalizedJob], now: datetime,
@@ -103,7 +135,9 @@ def upsert_jobs(session: Session, jobs: Sequence[NormalizedJob], now: datetime,
     inserted = 0
     for chunk in _batches(rows):
         ins = insert(Job).values(chunk)
-        updates = {"last_seen_at": ins.excluded.last_seen_at}
+        updates = {"last_seen_at": ins.excluded.last_seen_at,
+                   "skills": func.coalesce(Job.skills, ins.excluded.skills),
+                   "title_skills": func.coalesce(Job.title_skills, ins.excluded.title_skills)}
         if private_to is None:
             updates["private"] = False
         stmt = ins.on_conflict_do_update(index_elements=[Job.dedupe_key], set_=updates)
@@ -241,28 +275,61 @@ def visible_jobs(user_id: int) -> Select:
     return select(Job).outerjoin(JobStatus, status_join(user_id)).where(visible_to(user_id))
 
 
+def _reviews(session: Session, user_id: int) -> dict[int, tuple[int, str | None]]:
+    """Gemini's rating and reason for this user's reviewed jobs."""
+    rows = session.execute(select(JobScore.job_id, JobScore.llm_fit, JobScore.llm_json).where(
+        JobScore.user_id == user_id, JobScore.llm_fit.is_not(None)))
+    return {job_id: (fit, (data or {}).get("reason")) for job_id, fit, data in rows}
+
+
+def _scored(job: Job, result: FilterResult, profile_skills: set[str] | None,
+            review: tuple[int, str | None] | None) -> dict:
+    """final_score, skill_score and fit_reason for a job that passed the filters."""
+    if profile_skills is None:
+        return {"final_score": provisional_score(result), "skill_score": None,
+                "fit_reason": None}
+    if job.skills is None:  # saved before skills were recorded
+        cols = job_skill_columns(job.title, job.description)
+        skills, title_skills = cols["skills"], cols["title_skills"]
+    else:
+        skills, title_skills = job.skills, job.title_skills or []
+    fit = local_fit(set(skills), set(title_skills), profile_skills, result.title_score,
+                    result.experience_unstated, result.remote_unconfirmed)
+    if review is None:
+        return {"final_score": fit.score, "skill_score": fit.skill, "fit_reason": fit.reason}
+    llm_fit, llm_reason = review
+    return {"final_score": blend(fit.score, llm_fit), "skill_score": fit.skill,
+            "fit_reason": llm_reason or fit.reason}
+
+
 def refilter_for_user(
     session: Session, user_id: int, searches: list[Search], now: datetime, max_age_days: int
 ) -> tuple[int, int]:
-    """Re-run this user's filters on every recent job they can see and were not sent,
-    so settings changes apply at once."""
+    """Re-run this user's filters on every recent job they can see and were not sent, and
+    score the ones that pass by fit to their profile, so settings changes apply at once."""
     cutoff = now - timedelta(days=max_age_days)
     stmt = visible_jobs(user_id).where(Job.first_seen_at >= cutoff, _open_for())
+    profile = load_profile(session, user_id)
+    profile_skills = set(profile.skills) if profile else None
+    reviews = _reviews(session, user_id) if profile else {}
     rows = []
     for job in session.scalars(stmt):
         result = best_result(_row_to_normalized(job), searches, now, max_age_days)
+        scored = (_scored(job, result, profile_skills, reviews.get(job.id)) if result.passed
+                  else {"final_score": None, "skill_score": None, "fit_reason": None})
         rows.append({
             "user_id": user_id,
             "job_id": job.id,
             "passed_filters": result.passed,
             "filter_reason": result.reason,
             "title_score": result.title_score,
-            "final_score": provisional_score(result) if result.passed else None,
+            **scored,
             "scored_at": now,
         })
     for chunk in _batches(rows):
         ins = insert(JobScore).values(chunk)
-        updates = ("passed_filters", "filter_reason", "title_score", "final_score", "scored_at")
+        updates = ("passed_filters", "filter_reason", "title_score", "final_score",
+                   "skill_score", "fit_reason", "scored_at")
         session.execute(ins.on_conflict_do_update(
             index_elements=[JobScore.user_id, JobScore.job_id],
             set_={k: ins.excluded[k] for k in updates},
@@ -276,9 +343,11 @@ def refilter_for_user(
 def select_digest(
     session: Session, user_id: int, now: datetime, max_age_days: int, max_jobs: int
 ) -> list[DigestJob]:
+    """The user's best new jobs; with a profile, only those at their chosen fit level."""
     cutoff = now - timedelta(days=max_age_days)
+    has_profile = load_profile(session, user_id) is not None
     stmt = (
-        select(Job, JobScore.final_score)
+        select(Job, JobScore.final_score, JobScore.fit_reason)
         .join(JobScore, and_(JobScore.job_id == Job.id, JobScore.user_id == user_id))
         .outerjoin(JobStatus, status_join(user_id))
         .where(
@@ -290,14 +359,18 @@ def select_digest(
         .order_by(JobScore.final_score.desc(), Job.posted_at.desc().nulls_last(), Job.id)
         .limit(max_jobs)
     )
+    if has_profile:
+        stmt = stmt.where(JobScore.final_score >= LEVEL_MIN[digest_fit(session, user_id)])
     return [
         DigestJob(
             job_id=job.id, title=job.title, company=job.company,
             location_text=job.location_text, work_mode=job.work_mode or "unknown",
             url=job.url, salary_text=job.salary_text, posted_at=job.posted_at,
             source=job.source, score=score or 0.0,
+            reason=reason if has_profile else None,
+            level=level_of(score or 0.0) if has_profile else None,
         )
-        for job, score in session.execute(stmt)
+        for job, score, reason in session.execute(stmt)
     ]
 
 
@@ -352,6 +425,7 @@ def run_pipeline(
     shared_adapters: Sequence[SourceAdapter],
     gmail: Sequence[tuple[int, SourceAdapter]] = (),
     now: datetime | None = None,
+    llm: "LLMClient | None" = None,
 ) -> RunSummary:
     """Fetch once for everyone, read each user's Gmail, then filter and pick a digest per
     user. Users without job titles (or blocked) are skipped."""
@@ -370,9 +444,23 @@ def run_pipeline(
             summary.sources.append(
                 ingest_source(session, adapter, [combined], now, private_to=user_id))
 
+    from jobhunter.review import DEFAULT_MAX_CALLS, CallBudget, review_top_jobs
+
+    llm_settings = get_setting(session, "llm", {}) or {}
+    budget = CallBudget(int(llm_settings.get("max_calls_per_run", DEFAULT_MAX_CALLS)))
     for user_id, searches in per_user.items():
         max_age, max_jobs = _user_limits(session, user_id)
         scored, passed = refilter_for_user(session, user_id, searches, now, max_age)
+        review_top_jobs(session, user_id, llm, now, budget)
         digest = select_digest(session, user_id, now, max_age, max_jobs)
         summary.users[user_id] = UserResult(scored, passed, digest)
     return summary
+
+
+def rescore_all(session: Session, now: datetime) -> int:
+    """Re-filter and re-score every active user's recent jobs. Returns users rescored."""
+    per_user = active_user_searches(session)
+    for user_id, searches in per_user.items():
+        max_age, _ = _user_limits(session, user_id)
+        refilter_for_user(session, user_id, searches, now, max_age)
+    return len(per_user)

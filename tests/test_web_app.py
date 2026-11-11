@@ -1,12 +1,15 @@
+from dataclasses import replace
+
 import pytest
 
 pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from jobhunter.mail_account import MailView  # noqa: E402
+from jobhunter.profile import ProfileError  # noqa: E402
 from jobhunter.web.app import create_app  # noqa: E402
 from jobhunter.web.forms import ProfileForm  # noqa: E402
-from jobhunter.web.store import RunRow  # noqa: E402
+from jobhunter.web.store import ProfileView, RunRow  # noqa: E402
 from tests.web_fakes import (  # noqa: E402
     FakeAccounts,
     FakeVerifier,
@@ -72,6 +75,26 @@ class FakeStore:
 
     def test_mail(self):
         return self.test_result
+
+    # ---- profile (resume)
+    profile = ProfileView("", (), False, "good", None)
+
+    def load_profile(self):
+        return self.profile
+
+    def save_profile_text(self, text):
+        self.profile = replace(self.profile, text=text)
+
+    def upload_resume(self, data):
+        self.uploads = getattr(self, "uploads", []) + [len(data)]
+        if not data.startswith(b"%PDF-"):
+            raise ProfileError("Upload a PDF file, or paste your resume text instead.")
+        self.profile = replace(self.profile, text="Text from the PDF")
+
+    def save_profile_options(self, llm_review, digest_fit):
+        if digest_fit not in ("strong", "good", "all"):
+            raise ValueError("Pick how many jobs to email you.")
+        self.profile = replace(self.profile, llm_review=llm_review, digest_fit=digest_fit)
 
 
 @pytest.fixture

@@ -38,7 +38,20 @@ Each job is kept only if it passes all of these. A dropped job stores a readable
 | Experience | Senior/Staff/Lead/Principal/Manager titles are dropped when your maximum is under 5 years. Level titles count as years: II/2/Intermediate ≈ 2, III/3 ≈ 4, IV/4 and above ≈ 6, and are dropped when above your maximum. Text such as "2+ years" or "1–3 yrs exp" is compared with your range. Jobs that state no experience are kept with a small penalty. |
 | Recency | Jobs older than your maximum age (default 14 days) are dropped. |
 
-Until embedding and LLM scoring arrive (Phase 4), the score is 1.0 minus 0.1 for unstated experience and minus 0.1 for remote roles that never mention India.
+### Fit score
+
+Jobs that pass the filters are ranked by how well they fit your resume. Upload it on **Settings → My profile** (PDF up to 2 MB and 10 pages, or paste the text). Only cleaned text is kept: email addresses, phone numbers and links are removed and the PDF itself is never stored. You can edit the text, and the skills found in it are shown as tags.
+
+| Part | Rule |
+|---|---|
+| Skills (65%) | Share of the job's skills that are in your profile, from a built-in list of about 300 skills and their other names (JS = JavaScript, Postgres = PostgreSQL, k8s = Kubernetes). Skills in the job title count twice. A job naming no known skill counts as half. |
+| Title (35%) | How closely the job title matches your titles. |
+| Penalties | Minus 0.1 for unstated experience, minus 0.1 for a remote role that never mentions India. |
+| Level | **Strong** 0.75 and up, **Good** 0.55 and up, otherwise **Weak**. |
+
+Each match shows its level and a reason such as *Matches Python, Django, SQL · Missing AWS* in My jobs, the daily email and the Chrome bubble. On Settings you choose what the daily email includes: strong fits only, good and strong (default), or everything that passed. My jobs always lists every match, best first. Without a profile, the score is 1.0 minus the penalties, as before.
+
+**Gemini review (optional, off by default).** Tick *Let Gemini review my top 10 jobs each day* and the daily run sends your profile text (without contact details or its first line, usually your name) and your 10 best new jobs to Google's Gemini in one call. Gemini rates each 1–5 with a short reason; the final score becomes half the local score and half Gemini's rating, and its reason replaces the local one. If Gemini fails or `GEMINI_API_KEY` is not set, the local scores stay and the run carries on. After the update, run `python -m jobhunter rescore` once to find skills in jobs saved earlier.
 
 ### Sources
 
@@ -113,6 +126,7 @@ data/                  default company watchlist, seeded into the database once
 | `ADMIN_EMAILS` | Optional. Comma-separated Google emails that also get the **Admin** page (users, blocking, sources, watchlist). Nobody can block the owner. |
 | `SESSION_SECRET` | 32+ random characters: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
 | `ALERT_TO` (optional) | Where failure alerts go, so they still arrive if the database is down. |
+| `GEMINI_API_KEY` | Optional, for the Gemini review: [aistudio.google.com](https://aistudio.google.com) → *Get API key* (free tier). Needed only in `.env` and GitHub Actions, not on Render. `GEMINI_MODEL` defaults to `gemini-2.5-flash`. |
 | `SETTINGS_KEY` | Encrypts the Gmail app password: `python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`. Use the same value locally, in GitHub Actions and on Render. |
 | `TEST_DATABASE_URL` (optional) | A **local** Postgres database for the database tests. Never the hosted one. |
 
@@ -171,7 +185,7 @@ Then open http://localhost:8000 (`localhost` is an authorised Firebase domain by
 
 ## Deployment
 
-**Daily run (GitHub Actions).** Add these repository secrets under *Settings → Secrets and variables → Actions*: `DATABASE_URL`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `RESEND_API_KEY`, `SETTINGS_KEY` and optionally `ALERT_TO`. The workflow in [.github/workflows/run.yml](.github/workflows/run.yml) is scheduled at 7:43 AM IST, with backups at 9:13 and 11:43 AM IST. GitHub can delay scheduled runs, and at busy times (especially the top of the hour) it can drop them, so the main time is off the hour and every scheduled run uses `--once-per-day`: a backup only works if no run has succeeded yet that day, so you never get two digests. The **Run workflow** button on the Actions tab always runs.
+**Daily run (GitHub Actions).** Add these repository secrets under *Settings → Secrets and variables → Actions*: `DATABASE_URL`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `RESEND_API_KEY`, `SETTINGS_KEY` and optionally `ALERT_TO` and `GEMINI_API_KEY`. The workflow in [.github/workflows/run.yml](.github/workflows/run.yml) is scheduled at 7:43 AM IST, with backups at 9:13 and 11:43 AM IST. GitHub can delay scheduled runs, and at busy times (especially the top of the hour) it can drop them, so the main time is off the hour and every scheduled run uses `--once-per-day`: a backup only works if no run has succeeded yet that day, so you never get two digests. The **Run workflow** button on the Actions tab always runs.
 
 **Web app (Render).** In the Render dashboard choose **New → Blueprint**, pick this repository, and enter `DATABASE_URL`, `SETTINGS_KEY`, `OWNER_EMAIL` and the four `FIREBASE_*` values when asked; Render generates `SESSION_SECRET`. [render.yaml](render.yaml) deploys a free web service in Singapore, applies database migrations on every build, and redeploys on every push to `main`. Free services sleep when idle, so the first visit after a break takes up to a minute. The daily run does not depend on the page.
 
@@ -197,7 +211,7 @@ Tests make no network calls: API responses are replayed from `tests/fixtures/`, 
 - Secrets live only in `.env`, GitHub Actions secrets and Render. Error messages and alert emails never contain API keys, URLs with keys, or database passwords.
 - LinkedIn and Naukri accounts are never logged into or automated, and their sites are never scraped. Their jobs come only from their own alert emails in your Gmail.
 - The Gmail app password is stored encrypted and is never shown, logged or put in an error message.
-- Job text sent to an LLM (Phase 4) will never include personal details.
+- Only cleaned resume text is stored (no email, phone or links); the uploaded PDF is never stored or logged. Gemini sees it only for users who turn the review on, without its first line.
 
 ## Roadmap
 
@@ -208,7 +222,7 @@ Tests make no network calls: API responses are replayed from `tests/fixtures/`, 
 | 2 | In progress | Daily GitHub Actions run, failure alerts, weekly heartbeat (waiting on the first scheduled run) |
 | 3 | Done | Careers sites (Greenhouse, Lever, Ashby, Workday, SmartRecruiters) from an editable 125-company watchlist; Amazon; Remotive and Remote OK; Gmail alert reader with LinkedIn and Naukri parsers checked against real alert emails |
 | A | Done | Google sign-in for many users, per-user settings and Gmail, My jobs page, owner Admin page, new marigold look and logo |
-| B | Next | Chrome bubble extension: on the job you open on LinkedIn, Naukri, Indeed or a careers site (no automatic browsing), shows whether it matches your filters, saves it to My jobs, lists your latest matches and marks jobs you have seen |
-| 4 | Planned | Embedding score from a profile, title and skill scores, optional LLM review with a no-LLM fallback |
+| B | Done | Chrome bubble extension: on the job you open on LinkedIn, Naukri, Indeed or a careers site (no automatic browsing), shows whether it matches your filters, saves it to My jobs, lists your latest matches and marks jobs you have seen |
+| 4 | Done | Fit score from your resume (skills and title), Strong/Good/Weak levels with reasons, digest fit choice, optional Gemini review of your top 10 a day |
 | 5 | Planned | Applied / Not interested / Save links in the email; rejections lower similar jobs |
 | 6 | Planned | Optional resume and cover-letter drafts (the job list and status pages arrived with accounts) |

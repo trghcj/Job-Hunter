@@ -148,3 +148,21 @@ test("logo is drawn inline, no image file from the extension", () => {
   assert.ok(bubble.root.querySelector("svg.jh-logo path"));
   assert.equal(bubble.root.querySelector("img"), null);
 });
+
+test("match with fit shows level and reason", () => {
+  const state = result("match");
+  state.result.fit = { level: "strong", score: 0.82, reason: "Matches Python, Django" };
+  const v = JH.viewModel(state);
+  assert.equal(v.ring, "match");
+  assert.equal(v.headline, "Strong fit · Matches Python, Django");
+  state.result.fit = { level: "weak", score: 0.3, reason: "Missing Go" };
+  assert.equal(JH.viewModel(state).headline, "Weak fit · Missing Go");
+});
+
+test("match without fit keeps old headline", () => {
+  const state = result("match");
+  state.result.fit = null;
+  assert.equal(JH.viewModel(state).headline, "Matches your filters");
+  state.result.fit = { level: "bogus", score: 1, reason: "x" };
+  assert.equal(JH.viewModel(state).headline, "Matches your filters");
+});

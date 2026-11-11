@@ -87,3 +87,24 @@ def test_dbapi_matches_are_users_own(db_session):
 def test_dbapi_me(db_session):
     a = user(db_session, 1)
     assert api(db_session).me(a) == {"email": "u1@gmail.com", "name": "U1"}
+
+
+def test_check_returns_fit_with_profile(db_session):
+    from jobhunter.profile import save_profile
+
+    a = user(db_session, 1)
+    save_profile(db_session, a, "Me\nPython and Django", NOW)
+    info = JobInfo(**{**INFO, "description": "Python, Django and AWS. 0-1 years"})
+    fit = api(db_session).check(a, info).fit
+    assert fit["level"] in ("strong", "good", "weak") and 0 <= fit["score"] <= 1
+    assert fit["reason"] == "Matches Django, Python · Missing AWS"
+
+
+def test_check_fit_none_without_profile_or_when_not_a_match(db_session):
+    from jobhunter.profile import save_profile
+
+    a = user(db_session, 1)
+    assert api(db_session).check(a, JobInfo(**INFO)).fit is None
+    save_profile(db_session, a, "Me\nPython", NOW)
+    other = JobInfo(**{**INFO, "title": "Data Analyst"})
+    assert api(db_session).check(a, other).fit is None

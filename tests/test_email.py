@@ -168,3 +168,16 @@ def test_deliver_respects_email_budget():
         [digest_job()], FakeSender(), ["me@example.com"], MemoryBudget(0), NOW, mark=None
     )
     assert not result.sent and "limit" in result.error
+
+
+def test_digest_email_shows_reason_not_raw_score():
+    job = digest_job(level="strong", reason="Matches Python & Django · Missing AWS")
+    _, html, text = build_digest([job], NOW)
+    assert "Strong fit" in html and "Matches Python &amp; Django · Missing AWS" in html
+    assert "score 0.90" not in html
+    assert "Strong fit · Matches Python & Django · Missing AWS" in text
+
+
+def test_digest_email_without_profile_unchanged():
+    _, html, text = build_digest([digest_job()], NOW)
+    assert "score 0.90" in html and "fit ·" not in text

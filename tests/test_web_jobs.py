@@ -110,3 +110,27 @@ def test_non_http_job_links_not_rendered_as_links(client, jobs):
     jobs.cards["matches"] = [card(1, url="javascript:alert(1)")]
     sign_in(client)
     assert 'href="javascript:' not in client.get("/").text
+
+
+def test_matches_show_level_and_reason(jobs):
+    from dataclasses import replace
+
+    from jobhunter.web.store import ProfileView
+
+    jobs.cards["matches"] = [replace(card(1), level="strong",
+                                     reason="Matches <b>Python</b> · Missing AWS")]
+    store = FakeStore()
+    store.profile = ProfileView("Python", ("Python",), False, "good", None)
+    app = create_app(store_factory=lambda uid: store, jobs_store=jobs,
+                     verifier=FakeVerifier(), accounts=FakeAccounts(), settings=app_settings())
+    client = TestClient(app)
+    sign_in(client)
+    page = client.get("/").text
+    assert "Strong fit" in page and "fit-strong" in page
+    assert "Matches &lt;b&gt;Python&lt;/b&gt; · Missing AWS" in page
+    assert "Upload your resume to rank jobs by fit." not in page
+
+
+def test_matches_hint_without_profile(client):
+    sign_in(client)
+    assert "Upload your resume to rank jobs by fit." in client.get("/").text

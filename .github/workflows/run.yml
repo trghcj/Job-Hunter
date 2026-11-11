@@ -28,6 +28,7 @@ jobs:
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       ALERT_TO: ${{ secrets.ALERT_TO }}
       SETTINGS_KEY: ${{ secrets.SETTINGS_KEY }} # decrypts the saved Gmail app password
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # optional: AI review of top jobs
     steps:
       - uses: actions/checkout@v5
 
