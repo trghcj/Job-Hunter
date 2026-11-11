@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "JobHunter bubble",
+  "short_name": "JobHunter",
+  "version": "0.1.0",
+  "description": "Checks the job you have open against your JobHunter filters, and saves it to My jobs.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://jobhunter-settings.onrender.com/*",
+    "https://www.linkedin.com/*",
+    "https://www.naukri.com/*",
+    "https://in.indeed.com/*",
+    "https://www.indeed.com/*",
+    "https://boards.greenhouse.io/*",
+    "https://job-boards.greenhouse.io/*",
+    "https://jobs.lever.co/*",
+    "https://jobs.ashbyhq.com/*",
+    "https://*.myworkdayjobs.com/*",
+    "https://jobs.smartrecruiters.com/*"
+  ],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": {
+    "default_title": "JobHunter",
+    "default_popup": "popup.html",
+    "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png" }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": []
+}

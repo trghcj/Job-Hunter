@@ -1,0 +1,9 @@
+{
+  "name": "jobhunter-bubble",
+  "version": "0.1.0",
+  "private": true,
+  "description": "JobHunter Chrome extension (tests only; the extension itself has no build step)",
+  "engines": { "node": ">=22.7" },
+  "scripts": { "test": "node --test" },
+  "devDependencies": { "linkedom": "0.18.5" }
+}
