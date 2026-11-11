@@ -212,6 +212,21 @@ class MailAccount(Base):
     last_checked: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class ExtensionToken(Base):
+    """One connected browser (the Chrome extension). Only a SHA-256 hash of the token is kept."""
+
+    __tablename__ = "extension_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = _user_id()
+    token_hash: Mapped[str] = mapped_column(Text, unique=True)
+    label: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class AppSetting(Base):
     """Key/value app settings (digest time, score threshold, sources, llm, watchlist)."""
 

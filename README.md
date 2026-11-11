@@ -173,6 +173,14 @@ Then open http://localhost:8000 (`localhost` is an authorised Firebase domain by
 
 **Web app (Render).** In the Render dashboard choose **New → Blueprint**, pick this repository, and enter `DATABASE_URL`, `SETTINGS_KEY`, `OWNER_EMAIL` and the four `FIREBASE_*` values when asked; Render generates `SESSION_SECRET`. [render.yaml](render.yaml) deploys a free web service in Singapore, applies database migrations on every build, and redeploys on every push to `main`. Free services sleep when idle, so the first visit after a break takes up to a minute. The daily run does not depend on the page.
 
+## Chrome extension (the JobHunter bubble)
+
+A small floating bubble on job pages: LinkedIn (`/jobs/` pages), Naukri, Indeed, and company careers pages on Greenhouse, Lever, Ashby, Workday and SmartRecruiters. When you open a job it shows, with a green or grey ring, whether the job matches your filters (and why not); **Save to JobHunter** and **Mark applied** put it on My jobs; the panel lists your latest matches; a dot marks jobs you have already saved, applied to, or received by email.
+
+It only reads the job page you have open, in your own browser. It never clicks, scrolls, opens pages or searches for you, and never sends anything to LinkedIn, Naukri or Indeed; it talks only to your JobHunter server. It needs only the `storage` permission and network access to the JobHunter server.
+
+**Install:** Chrome → `chrome://extensions` → **Developer mode** on → **Load unpacked** → choose the `extension` folder. Then JobHunter → Settings → **Connect extension** → **Connect this browser**. Settings lists connected browsers with **Disconnect**. The toolbar popup switches automatic checking on or off and brings back the bubble on sites where you hid it. On LinkedIn, if you arrive at the jobs pages from the feed, reload the page once so the bubble appears.
+
 ## Testing
 
 ```powershell

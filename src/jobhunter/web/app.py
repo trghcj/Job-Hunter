@@ -21,9 +21,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from starlette.middleware.sessions import SessionMiddleware
 
 from jobhunter.accounts import Identity, SignIn
+from jobhunter.extension_tokens import label_from_user_agent
 from jobhunter.settings import Settings, get_settings
 from jobhunter.sources.catalog import SOURCE_LABELS
 from jobhunter.sources.watchlist import format_watchlist
+from jobhunter.web.api import ApiGateway, DbApi, RateLimiter, api_router
 from jobhunter.web.firebase_auth import FirebaseVerifier, TokenError
 from jobhunter.web.forms import WORK_MODES, parse_admin_form, parse_form, parse_gmail_form
 from jobhunter.web.jobs_store import TABS, JobsStore, JobsView
@@ -129,6 +131,8 @@ def create_app(
     store_factory: Callable[[int], SettingsStore] | None = None,
     jobs_store: JobsView | None = None,
     admin_store: AdminView | None = None,
+    api: ApiGateway | None = None,
+    api_limiter: RateLimiter | None = None,
     verifier: TokenVerifier | None = None,
     accounts: AccountsGateway | None = None,
     settings: Settings | None = None,
@@ -139,7 +143,7 @@ def create_app(
         raise RuntimeError("Set SESSION_SECRET (32+ random characters) to start.")
     missing = [f.upper() for f in FIREBASE_FIELDS if not getattr(settings, f)]
 
-    if None in (store_factory, accounts, jobs_store, admin_store):
+    if None in (store_factory, accounts, jobs_store, admin_store, api):
         from jobhunter.db import make_engine
 
         sessions = sessionmaker(make_engine())
@@ -148,6 +152,7 @@ def create_app(
         accounts = accounts or DbAccounts(sessions, settings.owner_email)
         jobs_store = jobs_store or JobsStore(sessions)
         admin_store = admin_store or AdminStore(sessions)
+        api = api or DbApi(sessions)
     if verifier is None and not missing:
         verifier = FirebaseVerifier(settings.firebase_project_id)
 
@@ -161,12 +166,15 @@ def create_app(
         session_cookie="jobhunter_session",
     )
     app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
+    app.include_router(api_router(api, api_limiter or RateLimiter()))
     login_csp = _login_csp(settings.firebase_auth_domain)
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
         response: Response = await call_next(request)
         response.headers.update(SECURITY_HEADERS)
+        if request.url.path.startswith("/extension/connect"):
+            response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Content-Security-Policy"] = (
             login_csp if request.url.path == "/login" else BASE_CSP)
         return response
@@ -287,6 +295,7 @@ def create_app(
             "mail": store.load_mail(),
             "gmail_errors": list(gmail_errors),
             "gmail_message": gmail_message,
+            "tokens": store.tokens(),
             "runs": store.recent_runs(),
         }
         return TEMPLATES.TemplateResponse(request, "settings.html", ctx, status_code=status)
@@ -360,6 +369,36 @@ def create_app(
             return early
         store_factory(user.id).delete_mail()
         return _see_other("/settings?gmail=removed#gmail")
+
+    # ---- connecting the Chrome extension
+
+    def connect_page(request: Request, user: UserInfo, token: str | None = None):
+        ctx = {"csrf": _csrf(request), "user": user, "page": "settings", "token": token}
+        response = TEMPLATES.TemplateResponse(request, "extension_connect.html", ctx)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.get("/extension/connect", response_class=HTMLResponse)
+    def extension_connect(request: Request):
+        user, early = signed_in(request)
+        return early or connect_page(request, user)
+
+    @app.post("/extension/connect")
+    async def extension_connect_post(request: Request):
+        user, _, early = await _checked_form(request)
+        if early:
+            return early
+        label = label_from_user_agent(request.headers.get("user-agent", ""))
+        return connect_page(request, user, store_factory(user.id).create_token(label))
+
+    @app.post("/extension/tokens/{token_id}/delete")
+    async def extension_disconnect(request: Request, token_id: int):
+        user, _, early = await _checked_form(request)
+        if early:
+            return early
+        if not store_factory(user.id).revoke_token(token_id):
+            return Response("Not found.", status_code=404)
+        return _see_other("/settings#extension")
 
     # ---- admin (owner only; everyone else gets 404)
 

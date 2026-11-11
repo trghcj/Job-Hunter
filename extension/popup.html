@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>JobHunter</title>
+  <style>
+    body { margin: 0; width: 300px; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto,
+      Arial, sans-serif; color: #1F1B16; background: #FAF7F2; }
+    main { padding: 14px 16px; }
+    header { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; }
+    header img { width: 24px; height: 24px; }
+    p { margin: 8px 0; }
+    .muted { color: #6B6258; font-size: 13px; }
+    .ok { color: #3E7139; font-weight: 600; }
+    .bad { color: #B5483B; font-weight: 600; }
+    button { background: #E09F3E; color: #1F1B16; border: 0; border-radius: 8px;
+      padding: 7px 12px; font: inherit; font-weight: 700; cursor: pointer; }
+    button.link { background: none; padding: 0; color: #6B6258; text-decoration: underline;
+      font-weight: 400; }
+    label { display: flex; gap: 8px; align-items: center; margin: 12px 0; }
+    input[type=checkbox] { accent-color: #E09F3E; width: 16px; height: 16px; }
+    ul { list-style: none; padding: 0; margin: 4px 0; }
+    li { display: flex; justify-content: space-between; padding: 3px 0; }
+    hr { border: 0; border-top: 1px solid #E6DFD5; margin: 12px 0; }
+  </style>
+</head>
+<body>
+<main>
+  <header><img src="icons/icon32.png" alt="">JobHunter</header>
+  <p id="status" class="muted">Checking connection…</p>
+  <p><button id="connect" type="button" hidden>Connect JobHunter</button>
+     <button id="disconnect" class="link" type="button" hidden>Disconnect this browser</button></p>
+  <hr>
+  <label><input id="auto" type="checkbox"> Check jobs automatically when I open them</label>
+  <div id="hidden-sites" hidden>
+    <p class="muted">Bubble hidden on:</p>
+    <ul id="hidden-list"></ul>
+  </div>
+  <p class="muted">The bubble only reads the job you have open. It never clicks, scrolls or
+    searches for you.</p>
+</main>
+<script src="config.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

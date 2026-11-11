@@ -9,3 +9,7 @@ dist/
 build/
 *.db
 *.sqlite
+
+# Chrome extension: test dependencies, and raw saved pages (personal data; only cleaned copies are committed)
+extension/node_modules/
+extension/test/fixtures/raw/
