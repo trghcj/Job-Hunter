@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="JobHunter">
+  <path d="M16 5h32a12 12 0 0 1 12 12v18a12 12 0 0 1-12 12H25L12 58V46.4A12 12 0 0 1 4 35V17A12 12 0 0 1 16 5z" fill="#E09F3E"/>
+  <circle cx="29" cy="22" r="9" fill="#FAF7F2" stroke="#1F1B16" stroke-width="5"/>
+  <path d="M35.4 28.4L40 33v4a5 5 0 0 1-9 3" fill="none" stroke="#1F1B16" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

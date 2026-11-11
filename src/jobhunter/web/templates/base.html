@@ -4,44 +4,31 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#E09F3E">
   <title>{% block title %}JobHunter{% endblock %}</title>
-  <style>
-    :root { --bg:#f6f7f9; --card:#fff; --text:#111827; --muted:#6b7280; --line:#e5e7eb;
-            --accent:#1a56db; --ok:#047857; --bad:#b91c1c; }
-    @media (prefers-color-scheme: dark) {
-      :root { --bg:#0f1115; --card:#181b21; --text:#e5e7eb; --muted:#9ca3af; --line:#2a2f38;
-              --accent:#6b9cff; --ok:#34d399; --bad:#f87171; }
-    }
-    * { box-sizing: border-box; }
-    body { margin:0; background:var(--bg); color:var(--text);
-           font:15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
-    main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
-    header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
-    h1 { font-size: 22px; margin: 0; }
-    h2 { font-size: 16px; margin: 0 0 12px; }
-    .card { background:var(--card); border:1px solid var(--line); border-radius:10px;
-            padding:18px; margin-bottom:16px; }
-    label { display:block; font-weight:600; margin: 12px 0 4px; }
-    .hint { color:var(--muted); font-size:13px; font-weight:400; }
-    input[type=text], input[type=number], input[type=password], input[type=email], textarea {
-      width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px;
-      background:var(--bg); color:var(--text); font:inherit; }
-    textarea { min-height: 96px; resize: vertical; }
-    .row { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .checks { display:flex; gap:16px; flex-wrap:wrap; }
-    .checks label { font-weight:400; margin:0; display:flex; align-items:center; gap:6px; }
-    button { background:var(--accent); color:#fff; border:0; border-radius:8px;
-             padding:9px 16px; font:inherit; font-weight:600; cursor:pointer; }
-    button.link { background:none; color:var(--muted); padding:0; font-weight:400; }
-    .msg { padding:10px 12px; border-radius:8px; margin-bottom:16px; }
-    .msg.ok { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
-    .msg.bad { background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); }
-    table { width:100%; border-collapse: collapse; font-size: 13px; }
-    th, td { text-align:left; padding:6px 4px; border-bottom:1px solid var(--line); }
-    th { color:var(--muted); font-weight:600; }
-    .ok { color: var(--ok); } .bad { color: var(--bad); }
-    @media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
-  </style>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
 </head>
-<body><main>{% block body %}{% endblock %}</main></body>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/"><img src="/static/logo.svg" alt="" width="32" height="32">JobHunter</a>
+    {% if user %}
+    <nav class="topnav" aria-label="Main">
+      <a href="/" {% if page == "jobs" %}aria-current="page"{% endif %}>My jobs</a>
+      <a href="/settings" {% if page == "settings" %}aria-current="page"{% endif %}>Settings</a>
+      {% if user.is_owner %}<a href="/admin" {% if page == "admin" %}aria-current="page"{% endif %}>Admin</a>{% endif %}
+    </nav>
+    <div class="usermenu">
+      <span class="who">{{ user.name or user.email }}</span>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="link" type="submit">Sign out</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</header>
+<main>{% block body %}{% endblock %}</main>
+</body>
 </html>

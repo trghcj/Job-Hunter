@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Sign in · JobHunter{% endblock %}
 {% block body %}
-<header><h1>JobHunter</h1></header>
-<div class="card" style="max-width:380px">
-  <p>Fresh tech jobs in India that match your filters, every morning.</p>
+<div class="card signin">
+  <img src="/static/logo.svg" alt="" width="72" height="72">
+  <h1>JobHunter</h1>
+  <p class="lede">Fresh tech jobs in India that match your filters, every morning.</p>
   {% if configured %}
-  <p><button id="signin" type="button"
+  <p><button id="signin" class="btn-google" type="button"
       data-api-key="{{ fb.firebase_api_key }}" data-auth-domain="{{ fb.firebase_auth_domain }}"
       data-project-id="{{ fb.firebase_project_id }}" data-app-id="{{ fb.firebase_app_id }}"
       data-csrf="{{ csrf }}">Continue with Google</button></p>

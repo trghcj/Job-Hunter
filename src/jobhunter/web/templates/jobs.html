@@ -1,10 +1,9 @@
 {% extends "base.html" %}
 {% block title %}My jobs · JobHunter{% endblock %}
 {% block body %}
-<header>
-  <h1>My jobs</h1>
-  <nav><a href="/settings">Settings</a></nav>
-</header>
+<h1>My jobs</h1>
+<p class="lede">Your best matches first. Save the ones you like, mark the ones you applied to,
+  hide the rest.</p>
 
 <nav class="tabs" aria-label="Job lists">
   {% for t in tabs %}
@@ -14,6 +13,7 @@
 
 {% if not cards %}
 <div class="card empty">
+  <img src="/static/logo.svg" alt="" width="56" height="56">
   {% if tab == "matches" %}
   <h2>No matches yet</h2>
   <p>Add the job titles you want on Settings. New matches arrive after the next daily run
@@ -53,8 +53,4 @@
 </article>
 {% endfor %}
 
-<form method="post" action="/logout" class="signout">
-  <input type="hidden" name="csrf" value="{{ csrf }}">
-  <button class="link" type="submit">Sign out</button>
-</form>
 {% endblock %}

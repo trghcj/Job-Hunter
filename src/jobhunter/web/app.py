@@ -257,7 +257,7 @@ def create_app(
             return early
         tab = request.query_params.get("tab", "matches")
         tab = tab if tab in TABS else "matches"
-        ctx = {"csrf": _csrf(request), "user": user, "tab": tab, "tabs": TABS,
+        ctx = {"csrf": _csrf(request), "user": user, "page": "jobs", "tab": tab, "tabs": TABS,
                "cards": jobs_store.list(user.id, tab)}
         return TEMPLATES.TemplateResponse(request, "jobs.html", ctx)
 
@@ -279,6 +279,7 @@ def create_app(
         ctx = {
             "csrf": _csrf(request),
             "user": user,
+            "page": "settings",
             "form": form,
             "errors": list(errors),
             "saved": saved,
@@ -375,7 +376,8 @@ def create_app(
                      saved=False):
         watchlist = admin_store.load_watchlist()
         ctx = {
-            "csrf": _csrf(request), "user": user, "errors": list(errors), "saved": saved,
+            "csrf": _csrf(request), "user": user, "page": "admin", "errors": list(errors),
+            "saved": saved,
             "users": admin_store.users(), "source_labels": SOURCE_LABELS,
             "sources": sources if sources is not None else admin_store.load_sources(),
             "watchlist_count": len(watchlist),
