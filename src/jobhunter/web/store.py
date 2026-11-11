@@ -158,10 +158,12 @@ class UserStore:
             set_user_setting(session, self.user_id, "max_age_days", form.max_age_days)
 
     def recent_runs(self, limit: int = 8) -> list[RunRow]:
-        """Shared runs plus this user's own Gmail and email runs; never other users'."""
+        """Shared runs plus this user's own Gmail, email and AI review runs; never other
+        users'."""
         with self._sessions() as session:
-            personal = or_(Run.source.like("gmail_alerts:%"), Run.source.like("email:%"))
-            mine = Run.source.in_((f"gmail_alerts:{self.user_id}", f"email:{self.user_id}"))
+            prefixes = ("gmail_alerts", "email", "llm")
+            personal = or_(*(Run.source.like(f"{p}:%") for p in prefixes))
+            mine = Run.source.in_(tuple(f"{p}:{self.user_id}" for p in prefixes))
             stmt = (select(Run).where(or_(~personal, mine))
                     .order_by(Run.id.desc()).limit(limit))
             return [RunRow(r.source, r.started_at, r.ok, r.fetched, r.inserted, r.error)

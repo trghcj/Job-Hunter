@@ -8,6 +8,7 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
+from typing import TYPE_CHECKING
 
 from sqlalchemy import ColumnElement, Select, and_, func, literal_column, or_, select
 from sqlalchemy.dialects.postgresql import insert
@@ -21,7 +22,10 @@ from jobhunter.models import RawJob
 from jobhunter.normalize import NormalizedJob, normalize_job
 from jobhunter.profile import digest_fit, load_profile
 from jobhunter.sources.base import Search, SourceAdapter
-from jobhunter.user_settings import active_user_searches, get_user_setting
+from jobhunter.user_settings import active_user_searches, get_setting, get_user_setting
+
+if TYPE_CHECKING:
+    from jobhunter.llm.client import LLMClient
 
 log = logging.getLogger(__name__)
 
@@ -421,6 +425,7 @@ def run_pipeline(
     shared_adapters: Sequence[SourceAdapter],
     gmail: Sequence[tuple[int, SourceAdapter]] = (),
     now: datetime | None = None,
+    llm: "LLMClient | None" = None,
 ) -> RunSummary:
     """Fetch once for everyone, read each user's Gmail, then filter and pick a digest per
     user. Users without job titles (or blocked) are skipped."""
@@ -439,9 +444,14 @@ def run_pipeline(
             summary.sources.append(
                 ingest_source(session, adapter, [combined], now, private_to=user_id))
 
+    from jobhunter.review import DEFAULT_MAX_CALLS, CallBudget, review_top_jobs
+
+    llm_settings = get_setting(session, "llm", {}) or {}
+    budget = CallBudget(int(llm_settings.get("max_calls_per_run", DEFAULT_MAX_CALLS)))
     for user_id, searches in per_user.items():
         max_age, max_jobs = _user_limits(session, user_id)
         scored, passed = refilter_for_user(session, user_id, searches, now, max_age)
+        review_top_jobs(session, user_id, llm, now, budget)
         digest = select_digest(session, user_id, now, max_age, max_jobs)
         summary.users[user_id] = UserResult(scored, passed, digest)
     return summary

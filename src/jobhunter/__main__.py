@@ -222,6 +222,16 @@ def _ran_today(session: Session, now: datetime) -> bool:
     return ran_successfully_today(session, now)
 
 
+def _llm_client(settings):
+    """Gemini for the daily review, or None when GEMINI_API_KEY is not set."""
+    key = settings.gemini_api_key.get_secret_value()
+    if not key:
+        return None
+    from jobhunter.llm.gemini import GeminiClient
+
+    return GeminiClient(key, settings.gemini_model)
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     from jobhunter.mail_account import gmail_adapters
     from jobhunter.pipeline import run_pipeline
@@ -248,7 +258,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                  if is_enabled(sources, "gmail_alerts") else [])
         if not adapters and not gmail:
             problems.append("no job sources are enabled or configured")
-        summary = run_pipeline(session, adapters, gmail, now=now)
+        summary = run_pipeline(session, adapters, gmail, now=now, llm=_llm_client(settings))
 
         for s in summary.sources:
             status = "ok" if s.ok else f"FAILED ({s.error})"

@@ -110,3 +110,12 @@ def test_runs_hide_other_users_email_rows(db_session):
     db_session.commit()
     (sa,) = stores(db_session, a)
     assert {r.source for r in sa.recent_runs()} == {"email", f"email:{a}"}
+
+
+def test_runs_hide_other_users_ai_review_rows(db_session):
+    a, b = new_user(db_session, 1), new_user(db_session, 2)
+    for source in ("adzuna", f"llm:{a}", f"llm:{b}"):
+        db_session.add(Run(source=source, started_at=NOW, ok=False, error="HTTP 429"))
+    db_session.commit()
+    (sa,) = stores(db_session, a)
+    assert {r.source for r in sa.recent_runs()} == {"adzuna", f"llm:{a}"}
