@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}My jobs · JobHunter{% endblock %}
+{% block body %}
+<header>
+  <h1>My jobs</h1>
+  <nav><a href="/settings">Settings</a></nav>
+</header>
+
+<nav class="tabs" aria-label="Job lists">
+  {% for t in tabs %}
+  <a href="/?tab={{ t }}" {% if t == tab %}aria-current="page" class="current"{% endif %}>{{ t|capitalize }}</a>
+  {% endfor %}
+</nav>
+
+{% if not cards %}
+<div class="card empty">
+  {% if tab == "matches" %}
+  <h2>No matches yet</h2>
+  <p>Add the job titles you want on Settings. New matches arrive after the next daily run
+    (about 7:45 AM IST).</p>
+  <p><a href="/settings">Go to Settings</a></p>
+  {% elif tab == "saved" %}
+  <p>Jobs you save show up here.</p>
+  {% else %}
+  <p>Jobs you mark as applied show up here.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% for c in cards %}
+<article class="card job">
+  <h2>
+    {% set link = c.url|safe_url %}
+    {% if link %}<a href="{{ link }}" target="_blank" rel="noopener noreferrer">{{ c.title }}</a>
+    {% else %}{{ c.title }}{% endif %}
+  </h2>
+  <p class="meta">{{ c.company }}{% if c.location_text %} · {{ c.location_text }}{% endif %}
+    {% if c.work_mode != "unknown" %} · {{ c.work_mode }}{% endif %}
+    · {{ c.source }}{% if c.posted_at %} · posted {{ c.posted_at.strftime("%d %b") }}{% endif %}
+    {% if c.status in ("saved", "applied") %}<span class="badge">{{ c.status }}</span>{% endif %}</p>
+  <div class="actions">
+    {% for value, label in (("saved", "Save"), ("applied", "Applied"), ("hidden", "Hide")) %}
+    {% if c.status != value %}
+    <form method="post" action="/jobs/{{ c.job_id }}/status">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <input type="hidden" name="status" value="{{ value }}">
+      <button type="submit" class="{{ 'link' if value == 'hidden' else 'secondary' }}">{{ label }}</button>
+    </form>
+    {% endif %}
+    {% endfor %}
+  </div>
+</article>
+{% endfor %}
+
+<form method="post" action="/logout" class="signout">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <button class="link" type="submit">Sign out</button>
+</form>
+{% endblock %}

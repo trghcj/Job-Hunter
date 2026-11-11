@@ -26,12 +26,15 @@ from jobhunter.sources.catalog import SOURCE_LABELS
 from jobhunter.sources.watchlist import format_watchlist
 from jobhunter.web.firebase_auth import FirebaseVerifier, TokenError
 from jobhunter.web.forms import WORK_MODES, parse_form, parse_gmail_form
+from jobhunter.web.jobs_store import TABS, JobsStore, JobsView
 from jobhunter.web.store import SettingsStore, UserStore
 
 log = logging.getLogger(__name__)
 
 HERE = Path(__file__).parent
 TEMPLATES = Jinja2Templates(directory=str(HERE / "templates"))
+TEMPLATES.env.filters["safe_url"] = lambda url: (
+    url if isinstance(url, str) and url.startswith(("https://", "http://")) else "")
 SESSION_DAYS = 30
 GMAIL_NOTICES = {
     "saved": "Gmail saved. Use Test connection to check it.",
@@ -116,6 +119,7 @@ def _login_csp(auth_domain: str) -> str:
 
 def create_app(
     store_factory: Callable[[int], SettingsStore] | None = None,
+    jobs_store: JobsView | None = None,
     verifier: TokenVerifier | None = None,
     accounts: AccountsGateway | None = None,
     settings: Settings | None = None,
@@ -126,13 +130,14 @@ def create_app(
         raise RuntimeError("Set SESSION_SECRET (32+ random characters) to start.")
     missing = [f.upper() for f in FIREBASE_FIELDS if not getattr(settings, f)]
 
-    if store_factory is None or accounts is None:
+    if store_factory is None or accounts is None or jobs_store is None:
         from jobhunter.db import make_engine
 
         sessions = sessionmaker(make_engine())
         key = settings.settings_key.get_secret_value()
         store_factory = store_factory or (lambda uid: UserStore(sessions, uid, key))
         accounts = accounts or DbAccounts(sessions, settings.owner_email)
+        jobs_store = jobs_store or JobsStore(sessions)
     if verifier is None and not missing:
         verifier = FirebaseVerifier(settings.firebase_project_id)
 
@@ -235,10 +240,26 @@ def create_app(
         return notice(request, "JobHunter is full right now",
                       "It has reached its user limit. Please try again later.")
 
-    @app.get("/")
-    def home(request: Request):
+    @app.get("/", response_class=HTMLResponse)
+    def my_jobs(request: Request):
         user, early = signed_in(request)
-        return early or _see_other("/settings")
+        if early:
+            return early
+        tab = request.query_params.get("tab", "matches")
+        tab = tab if tab in TABS else "matches"
+        ctx = {"csrf": _csrf(request), "user": user, "tab": tab, "tabs": TABS,
+               "cards": jobs_store.list(user.id, tab)}
+        return TEMPLATES.TemplateResponse(request, "jobs.html", ctx)
+
+    @app.post("/jobs/{job_id}/status")
+    async def set_job_status(request: Request, job_id: int):
+        user, data, early = await _checked_form(request)
+        if early:
+            return early
+        if not jobs_store.set_status(user.id, job_id, str(data.get("status", ""))):
+            return Response("Job not found.", status_code=404)
+        tab = str(data.get("tab", "matches"))
+        return _see_other(f"/?tab={tab if tab in TABS else 'matches'}")
 
     # ---- settings (per user)
 

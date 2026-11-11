@@ -10,6 +10,7 @@ from jobhunter.web.store import RunRow  # noqa: E402
 from tests.web_fakes import (  # noqa: E402
     FakeAccounts,
     FakeVerifier,
+    NoJobs,
     app_settings,
     page_csrf,
     sign_in,
@@ -62,7 +63,7 @@ def store():
 
 @pytest.fixture
 def client(store):
-    app = create_app(store_factory=lambda uid: store, verifier=FakeVerifier(),
+    app = create_app(store_factory=lambda uid: store, jobs_store=NoJobs(), verifier=FakeVerifier(),
                      accounts=FakeAccounts(), settings=app_settings())
     return TestClient(app)
 

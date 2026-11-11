@@ -10,6 +10,7 @@ from tests.test_web_app import FakeStore  # noqa: E402
 from tests.web_fakes import (  # noqa: E402
     FakeAccounts,
     FakeVerifier,
+    NoJobs,
     app_settings,
     csrf_from,
     page_csrf,
@@ -24,7 +25,8 @@ def accounts():
 
 def make_client(accounts, **settings_kw):
     store = FakeStore()
-    app = create_app(store_factory=lambda uid: store, verifier=FakeVerifier(),
+    app = create_app(store_factory=lambda uid: store, jobs_store=NoJobs(),
+                     verifier=FakeVerifier(),
                      accounts=accounts, settings=app_settings(**settings_kw))
     return TestClient(app)
 

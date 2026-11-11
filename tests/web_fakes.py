@@ -64,3 +64,13 @@ def sign_in(client, uid: str = "owner"):
 
 def page_csrf(client, path: str = "/settings") -> str:
     return csrf_from(client.get(path).text)
+
+
+class NoJobs:
+    """JobsView with nothing in it."""
+
+    def list(self, user_id, tab, limit=100):
+        return []
+
+    def set_status(self, user_id, job_id, status):
+        return False
