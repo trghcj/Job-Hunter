@@ -20,9 +20,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from jobhunter.accounts import Access
 from jobhunter.db import Job, JobScore, JobStatus, User
 from jobhunter.extension_tokens import hash_token, user_for_token
+from jobhunter.matching.fit import local_fit
 from jobhunter.models import RawJob
 from jobhunter.normalize import normalize_job
-from jobhunter.matching.fit import local_fit
 from jobhunter.pipeline import best_result, job_skill_columns, upsert_jobs, visible_to
 from jobhunter.profile import load_profile
 from jobhunter.user_settings import get_user_setting, load_active_searches
