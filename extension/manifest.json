@@ -5,19 +5,7 @@
   "version": "0.1.0",
   "description": "Checks the job you have open against your JobHunter filters, and saves it to My jobs.",
   "permissions": ["storage"],
-  "host_permissions": [
-    "https://jobhunter-settings.onrender.com/*",
-    "https://www.linkedin.com/*",
-    "https://www.naukri.com/*",
-    "https://in.indeed.com/*",
-    "https://www.indeed.com/*",
-    "https://boards.greenhouse.io/*",
-    "https://job-boards.greenhouse.io/*",
-    "https://jobs.lever.co/*",
-    "https://jobs.ashbyhq.com/*",
-    "https://*.myworkdayjobs.com/*",
-    "https://jobs.smartrecruiters.com/*"
-  ],
+  "host_permissions": ["https://jobhunter-settings.onrender.com/*"],
   "background": { "service_worker": "background.js", "type": "module" },
   "action": {
     "default_title": "JobHunter",
@@ -30,5 +18,30 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "content_scripts": []
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.linkedin.com/jobs/*",
+        "https://www.naukri.com/*",
+        "https://in.indeed.com/*",
+        "https://www.indeed.com/*",
+        "https://boards.greenhouse.io/*",
+        "https://job-boards.greenhouse.io/*",
+        "https://jobs.lever.co/*",
+        "https://jobs.ashbyhq.com/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://jobs.smartrecruiters.com/*"
+      ],
+      "js": [
+        "config.js",
+        "readers/common.js",
+        "readers/jsonld.js",
+        "readers/index.js",
+        "bubble/view.js",
+        "bubble/bubble.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
 }

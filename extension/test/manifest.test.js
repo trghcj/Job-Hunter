@@ -17,21 +17,21 @@ test("permissions are exactly storage", () => {
   assert.deepEqual(manifest.permissions, ["storage"]);
 });
 
-test("no broad host permissions", () => {
-  const hosts = manifest.host_permissions;
-  assert.ok(hosts.includes(SERVER));
-  for (const h of hosts) {
-    assert.ok(!["<all_urls>", "*://*/*", "https://*/*", "http://*/*"].includes(h), h);
-    assert.ok(h.startsWith("https://"), h);
-  }
+test("network access only to the JobHunter server", () => {
+  assert.deepEqual(manifest.host_permissions, [SERVER]);
 });
 
-test("content scripts only run on listed hosts", () => {
-  const hosts = new Set(manifest.host_permissions);
-  for (const entry of manifest.content_scripts || []) {
+const JOB_SITES = new Set([
+  "https://www.linkedin.com/jobs/*", "https://www.naukri.com/*", "https://in.indeed.com/*",
+  "https://www.indeed.com/*", "https://boards.greenhouse.io/*",
+  "https://job-boards.greenhouse.io/*", "https://jobs.lever.co/*", "https://jobs.ashbyhq.com/*",
+  "https://*.myworkdayjobs.com/*", "https://jobs.smartrecruiters.com/*",
+]);
+
+test("content scripts only run on job sites and the connect page", () => {
+  for (const entry of manifest.content_scripts) {
     for (const m of entry.matches) {
-      const base = m.replace(/\/[^/]*\*?$/, "/*").replace(/(https:\/\/[^/]+\/).*/, "$1*");
-      assert.ok([...hosts].some((h) => h === base || m.startsWith(h.slice(0, -1))), m);
+      assert.ok(JOB_SITES.has(m) || m === "https://jobhunter-settings.onrender.com/extension/connect*", m);
     }
   }
 });
