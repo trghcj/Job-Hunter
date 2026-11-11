@@ -1,6 +1,12 @@
 import pytest
 
-from jobhunter.web.forms import ProfileForm, parse_form, parse_gmail_form, parse_lines
+from jobhunter.web.forms import (
+    ProfileForm,
+    parse_admin_form,
+    parse_form,
+    parse_gmail_form,
+    parse_lines,
+)
 
 
 def fields(**overrides) -> dict[str, str]:
@@ -78,27 +84,26 @@ def test_too_long_title_rejected():
     assert any("title" in e.lower() for e in errors)
 
 
-def test_sources_and_watchlist():
-    form, errors = parse_form(
-        fields(watchlist="Groww | greenhouse | groww\nCRED | lever | cred"),
-        ["remote"],
-        sources=["greenhouse", "lever", "not-a-source"],
+def test_admin_form_sources_and_watchlist():
+    enabled, watchlist, errors = parse_admin_form(
+        {"watchlist": "Groww | greenhouse | groww\nCRED | lever | cred"},
+        ["greenhouse", "lever", "not-a-source"],
     )
     assert errors == []
-    assert form.sources["greenhouse"] and form.sources["lever"]
-    assert not form.sources["adzuna"] and "not-a-source" not in form.sources
-    assert [c.slug for c in form.watchlist] == ["groww", "cred"]
+    assert enabled["greenhouse"] and enabled["lever"]
+    assert not enabled["adzuna"] and "not-a-source" not in enabled
+    assert [c.slug for c in watchlist] == ["groww", "cred"]
 
 
-def test_no_sources_rejected_and_bad_watchlist_line_reported():
-    _, errors = parse_form(fields(watchlist="Groww | workday | groww"), ["remote"], sources=[])
+def test_admin_form_no_sources_rejected_and_bad_watchlist_line_reported():
+    _, _, errors = parse_admin_form({"watchlist": "Groww | workday | groww"}, [])
     assert any("source" in e.lower() for e in errors)
     assert any("Watchlist line 1" in e for e in errors)
 
 
-def test_sources_default_to_all_on_when_not_submitted():
+def test_profile_form_has_no_shared_settings():
     form, _ = parse_form(fields(), ["remote"])
-    assert all(form.sources.values())
+    assert not hasattr(form, "sources") and not hasattr(form, "watchlist")
 
 
 def test_gmail_form_valid_with_spaced_app_password():

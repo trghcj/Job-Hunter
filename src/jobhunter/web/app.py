@@ -25,9 +25,9 @@ from jobhunter.settings import Settings, get_settings
 from jobhunter.sources.catalog import SOURCE_LABELS
 from jobhunter.sources.watchlist import format_watchlist
 from jobhunter.web.firebase_auth import FirebaseVerifier, TokenError
-from jobhunter.web.forms import WORK_MODES, parse_form, parse_gmail_form
+from jobhunter.web.forms import WORK_MODES, parse_admin_form, parse_form, parse_gmail_form
 from jobhunter.web.jobs_store import TABS, JobsStore, JobsView
-from jobhunter.web.store import SettingsStore, UserStore
+from jobhunter.web.store import AdminStore, SettingsStore, UserStore
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +64,14 @@ class UserInfo:
 class AccountsGateway(Protocol):
     def sign_in(self, identity: Identity) -> SignIn: ...
     def get_user(self, user_id: int) -> UserInfo | None: ...
+
+
+class AdminView(Protocol):
+    def load_sources(self) -> dict[str, bool]: ...
+    def load_watchlist(self) -> list: ...
+    def save_sources_and_watchlist(self, enabled: dict[str, bool], watchlist: list) -> None: ...
+    def users(self) -> list: ...
+    def set_blocked(self, user_id: int, blocked: bool) -> None: ...
 
 
 class TokenVerifier(Protocol):
@@ -120,6 +128,7 @@ def _login_csp(auth_domain: str) -> str:
 def create_app(
     store_factory: Callable[[int], SettingsStore] | None = None,
     jobs_store: JobsView | None = None,
+    admin_store: AdminView | None = None,
     verifier: TokenVerifier | None = None,
     accounts: AccountsGateway | None = None,
     settings: Settings | None = None,
@@ -130,7 +139,7 @@ def create_app(
         raise RuntimeError("Set SESSION_SECRET (32+ random characters) to start.")
     missing = [f.upper() for f in FIREBASE_FIELDS if not getattr(settings, f)]
 
-    if store_factory is None or accounts is None or jobs_store is None:
+    if None in (store_factory, accounts, jobs_store, admin_store):
         from jobhunter.db import make_engine
 
         sessions = sessionmaker(make_engine())
@@ -138,6 +147,7 @@ def create_app(
         store_factory = store_factory or (lambda uid: UserStore(sessions, uid, key))
         accounts = accounts or DbAccounts(sessions, settings.owner_email)
         jobs_store = jobs_store or JobsStore(sessions)
+        admin_store = admin_store or AdminStore(sessions)
     if verifier is None and not missing:
         verifier = FirebaseVerifier(settings.firebase_project_id)
 
@@ -264,8 +274,8 @@ def create_app(
     # ---- settings (per user)
 
     def render_settings(request: Request, user: UserInfo, store: SettingsStore, form,
-                        errors=(), saved=False, status=200, watchlist_text: str | None = None,
-                        gmail_errors=(), gmail_message: str | None = None):
+                        errors=(), saved=False, status=200, gmail_errors=(),
+                        gmail_message: str | None = None):
         ctx = {
             "csrf": _csrf(request),
             "user": user,
@@ -273,10 +283,6 @@ def create_app(
             "errors": list(errors),
             "saved": saved,
             "modes": WORK_MODES,
-            "source_labels": SOURCE_LABELS,
-            "watchlist_text": (
-                watchlist_text if watchlist_text is not None else format_watchlist(form.watchlist)
-            ),
             "mail": store.load_mail(),
             "gmail_errors": list(gmail_errors),
             "gmail_message": gmail_message,
@@ -313,11 +319,9 @@ def create_app(
         store = store_factory(user.id)
         fields = {k: str(v) for k, v in data.items() if isinstance(v, str)}
         modes = [str(m) for m in data.getlist("work_modes")]
-        sources = [str(s) for s in data.getlist("sources")] if "sources_section" in data else None
-        form, errors = parse_form(fields, modes, sources)
+        form, errors = parse_form(fields, modes)
         if errors:
-            return render_settings(request, user, store, form, errors, status=400,
-                                   watchlist_text=fields.get("watchlist", ""))
+            return render_settings(request, user, store, form, errors, status=400)
         store.save(form)
         return _see_other("/settings?saved=1")
 
@@ -355,5 +359,72 @@ def create_app(
             return early
         store_factory(user.id).delete_mail()
         return _see_other("/settings?gmail=removed#gmail")
+
+    # ---- admin (owner only; everyone else gets 404)
+
+    def owner_only(request: Request) -> tuple[UserInfo | None, Response | None]:
+        user, early = signed_in(request)
+        if early:
+            return None, early
+        if not user.is_owner:
+            return None, Response("Not found.", status_code=404)
+        return user, None
+
+    def render_admin(request: Request, user: UserInfo, errors=(), status=200,
+                     sources: dict[str, bool] | None = None, watchlist_text: str | None = None,
+                     saved=False):
+        watchlist = admin_store.load_watchlist()
+        ctx = {
+            "csrf": _csrf(request), "user": user, "errors": list(errors), "saved": saved,
+            "users": admin_store.users(), "source_labels": SOURCE_LABELS,
+            "sources": sources if sources is not None else admin_store.load_sources(),
+            "watchlist_count": len(watchlist),
+            "watchlist_text": (watchlist_text if watchlist_text is not None
+                               else format_watchlist(watchlist)),
+        }
+        return TEMPLATES.TemplateResponse(request, "admin.html", ctx, status_code=status)
+
+    @app.get("/admin", response_class=HTMLResponse)
+    def admin_page(request: Request):
+        user, early = owner_only(request)
+        if early:
+            return early
+        return render_admin(request, user, saved=request.query_params.get("saved") == "1")
+
+    async def _owner_form(request: Request):
+        user, early = owner_only(request)
+        if early:
+            return None, None, early
+        data = await request.form()
+        if not _csrf_ok(request, data.get("csrf")):
+            return None, None, Response("Form expired, reload the page.", status_code=403)
+        return user, data, None
+
+    @app.post("/admin/sources")
+    async def save_admin_sources(request: Request):
+        user, data, early = await _owner_form(request)
+        if early:
+            return early
+        fields = {k: str(v) for k, v in data.items() if isinstance(v, str)}
+        ticked = [str(x) for x in data.getlist("sources")]
+        enabled, watchlist, errors = parse_admin_form(fields, ticked)
+        if errors:
+            return render_admin(request, user, errors, status=400, sources=enabled,
+                                watchlist_text=fields.get("watchlist", ""))
+        admin_store.save_sources_and_watchlist(enabled, watchlist)
+        return _see_other("/admin?saved=1")
+
+    @app.post("/admin/users/{user_id}/block")
+    async def block_user(request: Request, user_id: int):
+        user, data, early = await _owner_form(request)
+        if early:
+            return early
+        try:
+            admin_store.set_blocked(user_id, data.get("blocked") == "1")
+        except ValueError as exc:
+            return render_admin(request, user, [str(exc)], status=400)
+        except LookupError:
+            return Response("Not found.", status_code=404)
+        return _see_other("/admin")
 
     return app

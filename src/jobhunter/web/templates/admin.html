@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Admin · JobHunter{% endblock %}
+{% block body %}
+<header>
+  <h1>Admin</h1>
+  <nav><a href="/">My jobs</a> · <a href="/settings">Settings</a></nav>
+</header>
+
+{% if saved %}<div class="msg ok">Saved. The next daily run uses these settings.</div>{% endif %}
+{% if errors %}
+<div class="msg bad">{% for e in errors %}<div>{{ e }}</div>{% endfor %}</div>
+{% endif %}
+
+<div class="card">
+  <h2>Users <span class="hint">{{ users | length }}</span></h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Email</th><th>Joined</th><th>Last sign-in</th><th>Titles</th><th>Gmail</th><th></th></tr></thead>
+    <tbody>
+    {% for u in users %}
+    <tr>
+      <td>{{ u.email or "(not claimed yet)" }}{% if u.is_owner %} <span class="badge">owner</span>{% endif %}{% if u.blocked %} <span class="badge bad">blocked</span>{% endif %}</td>
+      <td>{{ u.created_at.strftime("%d %b %Y") if u.created_at else "" }}</td>
+      <td>{{ u.last_login_at.strftime("%d %b %H:%M") if u.last_login_at else "" }}</td>
+      <td>{{ u.titles }}</td>
+      <td>{{ "on" if u.gmail else "off" }}</td>
+      <td>
+        {% if not u.is_owner %}
+        <form method="post" action="/admin/users/{{ u.id }}/block">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="blocked" value="{{ '0' if u.blocked else '1' }}">
+          <button class="link" type="submit">{{ "Unblock" if u.blocked else "Block" }}</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<form method="post" action="/admin/sources">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="card">
+    <h2>Where to look <span class="hint">shared by everyone: jobs are fetched once a day for all users</span></h2>
+    <label>Job sources</label>
+    <div class="checks">
+      {% for key, label in source_labels.items() %}
+      <label><input type="checkbox" name="sources" value="{{ key }}" {% if sources.get(key) %}checked{% endif %}> {{ label }}</label>
+      {% endfor %}
+    </div>
+
+    <label for="watchlist">Company watchlist <span class="hint">{{ watchlist_count }} companies. One per line: <code>Name | ats | slug</code>. ats is greenhouse, lever, ashby, workday or smartrecruiters; slug is the company's name in its careers URL (jobs.lever.co/<b>cred</b>, boards.greenhouse.io/<b>groww</b>; Workday: <code>tenant.wd5/Site</code>).</span></label>
+    <textarea id="watchlist" name="watchlist" rows="12" spellcheck="false" placeholder="Groww | greenhouse | groww">{{ watchlist_text }}</textarea>
+  </div>
+  <p><button type="submit">Save</button></p>
+</form>
+{% endblock %}

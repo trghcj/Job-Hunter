@@ -4,7 +4,7 @@ UserStore: one signed-in user's own settings, Gmail and run history.
 AdminStore: the owner's shared settings (sources, company watchlist) and users.
 """
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from jobhunter import accounts
 from jobhunter.crypto import CryptoError
-from jobhunter.db import OWNER_PLACEHOLDER_ID, Run, SearchProfile
+from jobhunter.db import Run, SearchProfile
 from jobhunter.mail_account import MailView, delete_account, gmail_adapter, mail_view, save_account
 from jobhunter.sources.catalog import SOURCE_LABELS, is_enabled
 from jobhunter.sources.gmail_alerts import GmailError
@@ -181,20 +181,3 @@ class AdminStore:
     def set_blocked(self, user_id: int, blocked: bool) -> None:
         with self._sessions() as session:
             accounts.set_blocked(session, user_id, blocked)
-
-
-class DbSettingsStore(UserStore):
-    """Owner-only bridge for the pre-accounts settings page (removed with the Admin page):
-    the owner's own settings plus the shared sources and watchlist on one form."""
-
-    def __init__(self, session_factory: sessionmaker[Session], settings_key: str = "") -> None:
-        super().__init__(session_factory, OWNER_PLACEHOLDER_ID, settings_key)
-        self._admin = AdminStore(session_factory)
-
-    def load(self) -> ProfileForm:
-        return replace(super().load(), sources=self._admin.load_sources(),
-                       watchlist=self._admin.load_watchlist())
-
-    def save(self, form: ProfileForm) -> None:
-        super().save(form)
-        self._admin.save_sources_and_watchlist(form.sources, form.watchlist)

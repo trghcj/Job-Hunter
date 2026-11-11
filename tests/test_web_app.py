@@ -112,28 +112,6 @@ def test_invalid_settings_not_saved_and_shown_back(client, store):
     assert store.saves == 0
 
 
-def test_save_sources_and_watchlist(client, store):
-    token = login(client)
-    data = valid_form(token, sources_section="1", sources=["greenhouse", "remotive"],
-                      watchlist="Groww | greenhouse | groww\nCRED | lever | cred")
-    r = client.post("/settings", data=data, follow_redirects=False)
-    assert r.status_code == 303
-    assert store.form.sources["greenhouse"] and store.form.sources["remotive"]
-    assert not store.form.sources["adzuna"]
-    assert [c.slug for c in store.form.watchlist] == ["groww", "cred"]
-    page = client.get("/settings").text
-    assert "CRED | lever | cred" in page and "2 companies" in page
-
-
-def test_bad_watchlist_keeps_what_you_typed(client, store):
-    token = login(client)
-    data = valid_form(token, sources_section="1", sources=["lever"],
-                      watchlist="Groww | workday | groww")
-    r = client.post("/settings", data=data)
-    assert r.status_code == 400 and "Watchlist line 1" in r.text
-    assert "Groww | workday | groww" in r.text and store.saves == 0
-
-
 def test_gmail_save_never_shows_the_password(client, store):
     token = login(client)
     r = client.post("/gmail", data={"csrf": token, "gmail_address": "me@gmail.com",
@@ -188,6 +166,30 @@ def test_titles_are_escaped(client, store):
     login(client)
     page = client.get("/settings").text
     assert "<script>alert(1)</script>" not in page and "&lt;script&gt;" in page
+
+
+def test_settings_page_has_no_shared_sections(client):
+    login(client)
+    page = client.get("/settings").text
+    assert "Company watchlist" not in page and 'name="sources"' not in page
+
+
+def test_two_users_see_their_own_settings():
+    stores = {}
+
+    def factory(uid):
+        return stores.setdefault(uid, FakeStore())
+
+    app = create_app(store_factory=factory, jobs_store=NoJobs(), verifier=FakeVerifier(),
+                     accounts=FakeAccounts(), settings=app_settings())
+    alice, bob = TestClient(app), TestClient(app)
+    sign_in(alice, "alice")
+    sign_in(bob, "bob")
+    token = page_csrf(alice)
+    alice.post("/settings", data=valid_form(token, titles="Data Engineer"))
+    assert "Data Engineer" in alice.get("/settings").text
+    assert "Data Engineer" not in bob.get("/settings").text
+    assert len(stores) == 2
 
 
 def test_healthz_needs_no_login(client):

@@ -1,14 +1,14 @@
-"""DbSettingsStore against a real Postgres (TEST_DATABASE_URL); skipped when unset."""
+"""UserStore against a real Postgres (TEST_DATABASE_URL); skipped when unset."""
 
 from sqlalchemy.orm import sessionmaker
 
 from jobhunter.user_settings import load_active_searches
 from jobhunter.web.forms import ProfileForm
-from jobhunter.web.store import DbSettingsStore
+from jobhunter.web.store import UserStore
 
 
 def test_store_round_trip_feeds_the_pipeline(db_session):
-    store = DbSettingsStore(sessionmaker(bind=db_session.get_bind()))
+    store = UserStore(sessionmaker(bind=db_session.get_bind()), 1)
     form = store.load()  # seeds defaults on an empty database
     assert form.titles == [] and (form.min_years, form.max_years) == (0, 1)
 
