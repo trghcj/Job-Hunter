@@ -7,7 +7,7 @@ const { parseHTML, DOMParser } = require("linkedom");
 
 globalThis.DOMParser = DOMParser;
 globalThis.JH = {};
-for (const f of ["common", "jsonld", "index"]) require(`../readers/${f}.js`);
+for (const f of ["common", "jsonld", "linkedin", "indeed", "index"]) require(`../readers/${f}.js`);
 const JH = globalThis.JH;
 
 const FIXTURES = path.join(__dirname, "fixtures");
@@ -84,4 +84,109 @@ test("JobPosting without title or company is not a job", () => {
 
 test("readJob ignores unsupported hosts", () => {
   assert.equal(JH.readJob(...page("careers_greenhouse.html", "https://example.com/jobs/1")), null);
+});
+
+// --- LinkedIn (fixtures cut from real pages; the reader never uses LinkedIn's class names) ---
+
+const LI_JOB = {
+  url: "https://www.linkedin.com/jobs/view/4448325376/",
+  title: "Application Developer",
+  company: "Accenture in India",
+  location: "Noida, Uttar Pradesh, India",
+};
+
+test("linkedin job page", () => {
+  const job = JH.readJob(...page("linkedin_job.html",
+    "https://www.linkedin.com/jobs/view/4448325376/?alternateChannel=search&refId=x&trackingId=y"));
+  assert.deepEqual({ ...job, description: undefined }, { ...LI_JOB, description: undefined });
+  assert.ok(job.description.startsWith("Project Role : Application Developer Project Role"));
+  assert.ok(job.description.includes("Minimum 3 Year(s) Of Experience Is Required"));
+});
+
+test("linkedin right pane uses currentJobId", () => {
+  const job = JH.readJob(...page("linkedin_pane.html",
+    "https://www.linkedin.com/jobs/search-results/?currentJobId=4448325376&keywords=jobs"));
+  assert.deepEqual({ ...job, description: undefined }, { ...LI_JOB, description: undefined });
+});
+
+test("linkedin pane still showing the previous job is not read", () => {
+  assert.equal(JH.readJob(...page("linkedin_pane.html",
+    "https://www.linkedin.com/jobs/search-results/?currentJobId=4400000001")), null);
+});
+
+test("test_linkedin_feed_is_not_a_job", () => {
+  assert.equal(JH.readJob(...page("linkedin_feed.html", "https://www.linkedin.com/jobs/")), null);
+});
+
+test("linkedin job id before the details have loaded", () => {
+  const { document } = parseHTML("<html><body><main></main></body></html>");
+  assert.equal(JH.readLinkedIn(document, new URL("https://www.linkedin.com/jobs/view/123/")), null);
+});
+
+test("linkedin slug job address and older page layout", () => {
+  const { document } = parseHTML(`<html><body>
+    <h1 class="job-details-jobs-unified-top-card__job-title">ML Engineer</h1>
+    <div class="job-details-jobs-unified-top-card__company-name"><a href="/company/x/">Acme</a></div>
+    <div class="job-details-jobs-unified-top-card__primary-description-container">
+      <span>Pune, Maharashtra, India</span> · <span>2 days ago</span></div>
+    <div id="job-details"><p>Train models.</p></div></body></html>`);
+  const job = JH.readLinkedIn(document,
+    new URL("https://www.linkedin.com/jobs/view/ml-engineer-at-acme-3900000001"));
+  assert.deepEqual(job, { url: "https://www.linkedin.com/jobs/view/3900000001/",
+    title: "ML Engineer", company: "Acme", location: "Pune, Maharashtra, India",
+    description: "Train models." });
+});
+
+// --- Indeed ---
+
+const INDEED_JOB = {
+  url: "https://in.indeed.com/viewjob?jk=61ec1518af24d6b6",
+  title: "Engineer Associate, Software",
+  company: "Giant Eagle",
+  location: "Bengaluru, Karnataka",
+};
+
+test("indeed job open in the right pane, no id in the address", () => {
+  const job = JH.readJob(...page("indeed_job.html", "https://in.indeed.com/"));
+  assert.deepEqual({ ...job, description: undefined }, { ...INDEED_JOB, description: undefined });
+  assert.ok(job.description.startsWith("Job Summary As an Associate Software Engineer"));
+  assert.ok(!job.description.includes("@layer"));
+});
+
+test("indeed vjk in the address", () => {
+  const job = JH.readJob(...page("indeed_job.html",
+    "https://in.indeed.com/jobs?q=python&vjk=61ec1518af24d6b6&from=x"));
+  assert.equal(job.url, INDEED_JOB.url);
+});
+
+test("indeed pane still showing the previous job is not read", () => {
+  assert.equal(JH.readJob(...page("indeed_job.html",
+    "https://in.indeed.com/jobs?q=python&vjk=0000000000000001")), null);
+});
+
+test("indeed viewjob page uses JSON-LD first", () => {
+  const html = `<script type="application/ld+json">${JSON.stringify({
+    "@type": "JobPosting", title: "Data Analyst", hiringOrganization: { name: "Zeta" },
+    jobLocation: { address: { addressLocality: "Hyderabad", addressCountry: "IN" } },
+    description: "<p>SQL daily</p>" })}</script>`;
+  const { document } = parseHTML(html);
+  const job = JH.readJob(document, new URL("https://www.indeed.com/viewjob?jk=abcdef0123456789&tk=1"));
+  assert.deepEqual(job, { url: "https://www.indeed.com/viewjob?jk=abcdef0123456789",
+    title: "Data Analyst", company: "Zeta", location: "Hyderabad, IN", description: "SQL daily" });
+});
+
+test("indeed home with no job open", () => {
+  const { document } = parseHTML("<html><body><h1>Jobs for you</h1></body></html>");
+  assert.equal(JH.readJob(document, new URL("https://in.indeed.com/")), null);
+});
+
+// --- Fixtures ---
+
+test("fixtures contain no personal data", () => {
+  const banned = [/@gmail\.com/i, /miniprofile/i, /trackingId=/i, /refId=/i, /licdn\.com/i,
+    /<img/i, /alumni/i, /connections? work/i, /reach out to/i, /[?&](tk|mobtk)=/i];
+  for (const name of fs.readdirSync(FIXTURES).filter((f) => f.endsWith(".html"))) {
+    const html = fs.readFileSync(path.join(FIXTURES, name), "utf8");
+    for (const re of banned) assert.ok(!re.test(html), `${name} matches ${re}`);
+  }
 });

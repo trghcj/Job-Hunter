@@ -46,6 +46,8 @@
         "config.js",
         "readers/common.js",
         "readers/jsonld.js",
+        "readers/linkedin.js",
+        "readers/indeed.js",
         "readers/index.js",
         "bubble/view.js",
         "bubble/bubble.js",
