@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Connect the extension · JobHunter{% endblock %}
+{% block body %}
+<div class="card signin">
+  <img src="/static/logo.svg" alt="" width="72" height="72">
+  <h1>Connect the JobHunter bubble</h1>
+  {% if token %}
+  <div id="jh-connect" data-token="{{ token }}" hidden></div>
+  <p class="lede" id="jh-connect-status">Connecting… If nothing changes in a few seconds,
+    check that the JobHunter extension is installed and switched on, then reload this page.</p>
+  {% else %}
+  <p class="lede">This links the JobHunter extension in this browser to your account, so the
+    bubble can check jobs against your filters and save them to My jobs.</p>
+  <form method="post" action="/extension/connect">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <p><button type="submit">Connect this browser</button></p>
+  </form>
+  <p class="hint">You can disconnect it any time on Settings.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -64,6 +64,32 @@
   <p><button type="submit">Save settings</button></p>
 </form>
 
+<div class="card" id="extension">
+  <h2>Chrome extension</h2>
+  <p class="hint">The JobHunter bubble checks the job you have open on LinkedIn, Naukri, Indeed or a company careers page against your filters, and saves it to My jobs.</p>
+  {% if tokens %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Browser</th><th>Connected</th><th>Last used</th><th></th></tr></thead>
+    <tbody>
+    {% for t in tokens %}
+    <tr>
+      <td>{{ t.label }}</td>
+      <td>{{ t.created_at.strftime("%d %b %Y") if t.created_at else "" }}</td>
+      <td>{{ t.last_used_at.strftime("%d %b %H:%M") if t.last_used_at else "never" }}</td>
+      <td><form method="post" action="/extension/tokens/{{ t.id }}/delete">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="link" type="submit">Disconnect</button>
+      </form></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+  <p><a href="/extension/connect">Connect extension</a></p>
+</div>
+
 <div class="card" id="gmail">
   <h2>Gmail job alerts</h2>
   {% if gmail_message %}<div class="msg {{ 'bad' if gmail_message.startswith('Not connected') else 'ok' }}">{{ gmail_message }}</div>{% endif %}

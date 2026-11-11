@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from starlette.middleware.sessions import SessionMiddleware
 
 from jobhunter.accounts import Identity, SignIn
+from jobhunter.extension_tokens import label_from_user_agent
 from jobhunter.settings import Settings, get_settings
 from jobhunter.sources.catalog import SOURCE_LABELS
 from jobhunter.sources.watchlist import format_watchlist
@@ -172,6 +173,8 @@ def create_app(
     async def security_headers(request: Request, call_next):
         response: Response = await call_next(request)
         response.headers.update(SECURITY_HEADERS)
+        if request.url.path.startswith("/extension/connect"):
+            response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Content-Security-Policy"] = (
             login_csp if request.url.path == "/login" else BASE_CSP)
         return response
@@ -292,6 +295,7 @@ def create_app(
             "mail": store.load_mail(),
             "gmail_errors": list(gmail_errors),
             "gmail_message": gmail_message,
+            "tokens": store.tokens(),
             "runs": store.recent_runs(),
         }
         return TEMPLATES.TemplateResponse(request, "settings.html", ctx, status_code=status)
@@ -365,6 +369,36 @@ def create_app(
             return early
         store_factory(user.id).delete_mail()
         return _see_other("/settings?gmail=removed#gmail")
+
+    # ---- connecting the Chrome extension
+
+    def connect_page(request: Request, user: UserInfo, token: str | None = None):
+        ctx = {"csrf": _csrf(request), "user": user, "page": "settings", "token": token}
+        response = TEMPLATES.TemplateResponse(request, "extension_connect.html", ctx)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.get("/extension/connect", response_class=HTMLResponse)
+    def extension_connect(request: Request):
+        user, early = signed_in(request)
+        return early or connect_page(request, user)
+
+    @app.post("/extension/connect")
+    async def extension_connect_post(request: Request):
+        user, _, early = await _checked_form(request)
+        if early:
+            return early
+        label = label_from_user_agent(request.headers.get("user-agent", ""))
+        return connect_page(request, user, store_factory(user.id).create_token(label))
+
+    @app.post("/extension/tokens/{token_id}/delete")
+    async def extension_disconnect(request: Request, token_id: int):
+        user, _, early = await _checked_form(request)
+        if early:
+            return early
+        if not store_factory(user.id).revoke_token(token_id):
+            return Response("Not found.", status_code=404)
+        return _see_other("/settings#extension")
 
     # ---- admin (owner only; everyone else gets 404)
 

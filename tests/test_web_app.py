@@ -52,6 +52,24 @@ class FakeStore:
     def delete_mail(self):
         self.mail = MailView()
 
+    # ---- extension tokens
+    def tokens(self):
+        return list(self._tokens.values()) if hasattr(self, "_tokens") else []
+
+    def create_token(self, label):
+        from datetime import UTC, datetime
+
+        from jobhunter.extension_tokens import TokenRow
+
+        self._tokens = getattr(self, "_tokens", {})
+        token_id = len(self._tokens) + 1
+        self._tokens[token_id] = TokenRow(token_id, label, datetime(2026, 11, 11, tzinfo=UTC),
+                                          None)
+        return f"raw-token-{token_id}-" + "x" * 30
+
+    def revoke_token(self, token_id):
+        return getattr(self, "_tokens", {}).pop(token_id, None) is not None
+
     def test_mail(self):
         return self.test_result
 

@@ -11,9 +11,10 @@ from typing import Protocol
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from jobhunter import accounts
+from jobhunter import accounts, extension_tokens
 from jobhunter.crypto import CryptoError
 from jobhunter.db import Run, SearchProfile
+from jobhunter.extension_tokens import TokenRow
 from jobhunter.mail_account import MailView, delete_account, gmail_adapter, mail_view, save_account
 from jobhunter.sources.catalog import SOURCE_LABELS, is_enabled
 from jobhunter.sources.gmail_alerts import GmailError
@@ -50,6 +51,9 @@ class SettingsStore(Protocol):
     def save_mail(self, address: str, app_password: str | None, senders: list[str]) -> None: ...
     def delete_mail(self) -> None: ...
     def test_mail(self) -> str: ...
+    def tokens(self) -> list[TokenRow]: ...
+    def create_token(self, label: str) -> str: ...
+    def revoke_token(self, token_id: int) -> bool: ...
 
 
 def _active_profile(session: Session, user_id: int) -> SearchProfile:
@@ -101,6 +105,20 @@ class UserStore:
             except (CryptoError, GmailError) as exc:
                 return f"Not connected: {exc}"
         return f"Connected. {waiting} job-alert emails are waiting to be read."
+
+    # ---- connected browsers (the extension); the raw token is returned once, never stored
+
+    def tokens(self) -> list[TokenRow]:
+        with self._sessions() as session:
+            return extension_tokens.list_tokens(session, self.user_id)
+
+    def create_token(self, label: str) -> str:
+        with self._sessions() as session:
+            return extension_tokens.create_token(session, self.user_id, label)
+
+    def revoke_token(self, token_id: int) -> bool:
+        with self._sessions() as session:
+            return extension_tokens.revoke_token(session, self.user_id, token_id)
 
     # ---- search profile and personal settings
 
