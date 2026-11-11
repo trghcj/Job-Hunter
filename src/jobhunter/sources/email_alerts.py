@@ -67,13 +67,19 @@ def _title_like(text: str) -> bool:
     return 2 <= len(text) <= 150 and not low.startswith(_NOT_TITLES)
 
 
-def _lines_after(tokens, i: int, link: re.Pattern[str], limit: int = 6) -> list[str]:
-    """Plain text lines after token i, up to the next job link."""
+def _lines_after(tokens, i: int, link: re.Pattern[str], job_id: str = "",
+                 limit: int = 6) -> list[str]:
+    """Text lines after token i, up to the next job's link.
+
+    Lines linking to the same job count as text: some LinkedIn layouts make the
+    "Company · City" line a link to the job too.
+    """
     out: list[str] = []
     for text, href in tokens[i + 1 :]:
-        if href and link.search(href):
+        same_job = bool(href and job_id and job_id in href)
+        if href and not same_job and link.search(href):
             break
-        if href or _NOISE.match(text):
+        if (href and not same_job) or _NOISE.match(text):
             continue
         out.append(text)
         if len(out) >= limit:
@@ -95,7 +101,7 @@ def parse_linkedin(html: str, sent: datetime | None) -> list[RawJob]:
         if not m or m.group(1) in seen or not _title_like(text):
             continue
         seen.add(m.group(1))
-        lines = _lines_after(tokens, i, _LINKEDIN_JOB)
+        lines = _lines_after(tokens, i, _LINKEDIN_JOB, job_id=m.group(1))
         company, location = "Unknown", None
         if lines:
             if " · " in lines[0]:

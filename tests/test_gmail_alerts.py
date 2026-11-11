@@ -211,3 +211,14 @@ def test_count_waiting():
 def test_ernakulam_counts_as_kochi():
     from jobhunter.normalize import detect_city
     assert detect_city("Ernakulam") == "Kochi"
+
+
+def test_parse_real_linkedin_layouts():
+    html = (Path(__file__).parent / "fixtures" / "linkedin_alert.html").read_text(encoding="utf-8")
+    jobs = parse_linkedin(html, SENT)
+    assert [(j.title, j.company, j.location_text) for j in jobs] == [
+        ("Python Developer (Tier1 B.Tech College)", "Collegedunia", "Gurugram (On-site)"),
+        ("Developer (IC)", "EXL", "Noida"),
+        ("Backend Engineer (SDE1/SDE2)", "Ultimutt™", "Gurgaon, Haryana, India"),
+    ]
+    assert jobs[0].url == "https://www.linkedin.com/jobs/view/4480010629/"
