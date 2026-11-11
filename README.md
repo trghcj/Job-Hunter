@@ -3,7 +3,7 @@
 A scheduled Python service that finds India-based jobs for your target titles once a day, filters them against your experience range and locations, and emails you a short digest of new matches. It runs in the cloud every morning at about 7:45 AM IST, so your laptop can stay off, and it runs entirely on free tiers.
 
 - **Sources:** Adzuna India, Amazon jobs, the careers sites (Greenhouse, Lever, Ashby, Workday, SmartRecruiters) of a 125-company watchlist of Indian tech companies and MNCs with India offices, and the Remotive and Remote OK remote feeds. Every source is a plug-in adapter; more are on the [roadmap](#roadmap).
-- **Settings in the app, not in files:** job titles, experience range, cities, work modes and the digest address are edited on a small password-protected web page and stored in PostgreSQL.
+- **Accounts:** anyone signs in with Google (Firebase) and gets their own job titles, experience range, cities, work modes, Gmail job alerts and a **My jobs** page. Jobs are fetched once a day for everyone, then filtered for each person. Settings live in PostgreSQL, not in files.
 - **Resilient:** a failing source never stops a run. You get a failure alert email, and a weekly "still alive" email, so silence never hides a broken pipeline.
 - **Cost:** ₹0 a month (GitHub Actions, Supabase, Resend, Render and Adzuna free tiers).
 
@@ -107,7 +107,8 @@ data/                  default company watchlist, seeded into the database once
 | `DATABASE_URL` | Supabase → Project Settings → Database → **Session pooler** string (port 5432). The direct connection is IPv6-only and unreachable from GitHub Actions; the transaction pooler (6543) breaks psycopg and migrations. |
 | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` | [developer.adzuna.com](https://developer.adzuna.com) |
 | `RESEND_API_KEY` | [resend.com](https://resend.com). Without your own domain, Resend only delivers to the address you signed up with. |
-| `WEB_PASSWORD` | Any long password, for the settings page. |
+| `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `FIREBASE_APP_ID` | Firebase console → Project settings → your web app → **Config**. Turn on **Authentication → Google**, and add your Render domain under **Authentication → Settings → Authorized domains**. These four values are public; no Firebase private key is used. |
+| `OWNER_EMAIL` | Your Google sign-in email. That account becomes the owner: it gets the data from before accounts existed and the **Admin** page. |
 | `SESSION_SECRET` | 32+ random characters: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
 | `ALERT_TO` (optional) | Where failure alerts go, so they still arrive if the database is down. |
 | `SETTINGS_KEY` | Encrypts the Gmail app password: `python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`. Use the same value locally, in GitHub Actions and on Render. |
@@ -147,7 +148,9 @@ Running `run` twice sends the digest once; the second run reports `no new jobs, 
 | `test-email` | Sends a one-job sample digest. |
 | `heartbeat` | Sends the weekly summary now. |
 
-## Settings page
+## Web app
+
+Pages: **My jobs** (your matches, best first, with Save / Applied / Hide and Matches / Saved / Applied tabs), **Settings** (titles, experience, cities, work modes, exclude words, digest, Gmail job alerts), and **Admin** for the owner (users, block/unblock, job sources and the company watchlist, which everyone shares).
 
 Run it locally:
 
@@ -156,15 +159,19 @@ $env:WEB_HTTPS_ONLY = "false"   # local http only; keep secure cookies online
 .\.venv\Scripts\python.exe -m uvicorn jobhunter.web.app:create_app --factory --port 8000
 ```
 
-Then open http://127.0.0.1:8000 and sign in with `WEB_PASSWORD`. Titles, cities and exclude words can be separated by commas or new lines. Saved changes apply on the next run.
+Then open http://localhost:8000 (`localhost` is an authorised Firebase domain by default) and click **Continue with Google**. Titles, cities and exclude words can be separated by commas or new lines. Saved changes apply on the next run.
 
-Security: a single password compared in constant time, a 1-second delay after a wrong guess, a signed HTTPS-only session cookie, a CSRF token on every form, escaped output, and headers that block framing. The app refuses to start without `WEB_PASSWORD` and `SESSION_SECRET`.
+**Accounts and limits.** Sign-up is open to any Google account with a verified email, up to 50 users (later sign-ins see "JobHunter is full"; the owner always gets in), with at most 15 job titles each. The first sign-in with `OWNER_EMAIL` claims the owner account. To hand ownership to another account later, set `users.is_owner` in the database by hand.
+
+**Who gets email.** Resend's free plan without your own domain only delivers to your own address, so only the owner gets the daily email. Everyone else sees their matches on My jobs. Once you verify a domain in Resend, set `digest_from` in `app_settings` to an address on it (for example `JobHunter <jobs@yourdomain.in>`) and every user with a digest address gets an email too; no code change.
+
+**Security.** The server checks each Google sign-in token itself (RS256 signature against Google's public certificates, audience, issuer, expiry, verified email), then keeps a signed, HTTPS-only session cookie for 30 days. Every form has a CSRF token, every per-user query is filtered by user id, jobs from someone's Gmail are visible only to them, output is escaped, and headers block framing. The app refuses to start without `SESSION_SECRET`.
 
 ## Deployment
 
 **Daily run (GitHub Actions).** Add these repository secrets under *Settings → Secrets and variables → Actions*: `DATABASE_URL`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `RESEND_API_KEY`, `SETTINGS_KEY` and optionally `ALERT_TO`. The workflow in [.github/workflows/run.yml](.github/workflows/run.yml) is scheduled at 7:43 AM IST, with backups at 9:13 and 11:43 AM IST. GitHub can delay scheduled runs, and at busy times (especially the top of the hour) it can drop them, so the main time is off the hour and every scheduled run uses `--once-per-day`: a backup only works if no run has succeeded yet that day, so you never get two digests. The **Run workflow** button on the Actions tab always runs.
 
-**Settings page (Render).** In the Render dashboard choose **New → Blueprint**, pick this repository, and enter `DATABASE_URL` and `WEB_PASSWORD` when asked; Render generates `SESSION_SECRET`. [render.yaml](render.yaml) deploys a free web service in Singapore and redeploys on every push to `main`. Free services sleep when idle, so the first visit after a break takes up to a minute. The daily run does not depend on the page.
+**Web app (Render).** In the Render dashboard choose **New → Blueprint**, pick this repository, and enter `DATABASE_URL`, `SETTINGS_KEY`, `OWNER_EMAIL` and the four `FIREBASE_*` values when asked; Render generates `SESSION_SECRET`. [render.yaml](render.yaml) deploys a free web service in Singapore, applies database migrations on every build, and redeploys on every push to `main`. Free services sleep when idle, so the first visit after a break takes up to a minute. The daily run does not depend on the page.
 
 ## Testing
 
@@ -189,8 +196,9 @@ Tests make no network calls: API responses are replayed from `tests/fixtures/`, 
 | 0 | Done | Project skeleton, settings, database migrations |
 | 1 | Done | Adzuna adapter, normalizer, filters, digest email, settings page on Render |
 | 2 | In progress | Daily GitHub Actions run, failure alerts, weekly heartbeat (waiting on the first scheduled run) |
-| 3 | In progress | Done: careers sites (Greenhouse, Lever, Ashby, Workday, SmartRecruiters) from an editable 125-company watchlist; Amazon; Remotive and Remote OK; Gmail alert reader with LinkedIn and Naukri parsers. Next: check the parsers against real alert emails |
-| — | Planned | Chrome companion extension: reads the job cards you open on LinkedIn, Naukri or Indeed (no automatic browsing), highlights matches using the same filters, and saves jobs to JobHunter |
+| 3 | Done | Careers sites (Greenhouse, Lever, Ashby, Workday, SmartRecruiters) from an editable 125-company watchlist; Amazon; Remotive and Remote OK; Gmail alert reader with LinkedIn and Naukri parsers checked against real alert emails |
+| A | Done | Google sign-in for many users, per-user settings and Gmail, My jobs page, owner Admin page, new marigold look and logo |
+| B | Next | Chrome bubble extension: on the job you open on LinkedIn, Naukri, Indeed or a careers site (no automatic browsing), shows whether it matches your filters, saves it to My jobs, lists your latest matches and marks jobs you have seen |
 | 4 | Planned | Embedding score from a profile, title and skill scores, optional LLM review with a no-LLM fallback |
 | 5 | Planned | Applied / Not interested / Save links in the email; rejections lower similar jobs |
-| 6 | Planned | Job list and status pages in the web app; optional resume and cover-letter drafts |
+| 6 | Planned | Optional resume and cover-letter drafts (the job list and status pages arrived with accounts) |
