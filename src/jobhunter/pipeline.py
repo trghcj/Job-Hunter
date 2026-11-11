@@ -9,12 +9,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
 
-from sqlalchemy import ColumnElement, Select, and_, literal_column, or_, select
+from sqlalchemy import ColumnElement, Select, and_, func, literal_column, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from jobhunter.db import Job, JobOwner, JobScore, JobStatus, Run
 from jobhunter.matching.filters import DEFAULT_MAX_AGE_DAYS, FilterResult, apply_filters
+from jobhunter.matching.skills import extract_skills
 from jobhunter.models import RawJob
 from jobhunter.normalize import NormalizedJob, normalize_job
 from jobhunter.sources.base import Search, SourceAdapter
@@ -23,6 +24,7 @@ from jobhunter.user_settings import active_user_searches, get_user_setting
 log = logging.getLogger(__name__)
 
 BATCH = 200
+BACKFILL_BATCH = 500
 DEFAULT_MAX_JOBS = 25
 EXPERIENCE_UNSTATED_PENALTY = 0.1
 REMOTE_UNCONFIRMED_PENALTY = 0.1
@@ -89,7 +91,29 @@ def _job_row(j: NormalizedJob, now: datetime, private: bool) -> dict:
         "first_seen_at": now,
         "last_seen_at": now,
         "private": private,
+        **job_skill_columns(j.raw.title, j.raw.description),
     }
+
+
+def job_skill_columns(title: str, description: str | None) -> dict[str, list[str]]:
+    """The skills a job names (title + description), and those in its title."""
+    title_skills = extract_skills(title)
+    return {"skills": sorted(title_skills | extract_skills(description)),
+            "title_skills": sorted(title_skills)}
+
+
+def backfill_job_skills(session: Session) -> int:
+    """Fill skills for jobs saved before they were recorded. Returns how many."""
+    done = 0
+    while True:
+        rows = session.scalars(select(Job).where(Job.skills.is_(None)).limit(BACKFILL_BATCH)).all()
+        if not rows:
+            return done
+        for job in rows:
+            cols = job_skill_columns(job.title, job.description)
+            job.skills, job.title_skills = cols["skills"], cols["title_skills"]
+        session.commit()
+        done += len(rows)
 
 
 def upsert_jobs(session: Session, jobs: Sequence[NormalizedJob], now: datetime,
@@ -103,7 +127,9 @@ def upsert_jobs(session: Session, jobs: Sequence[NormalizedJob], now: datetime,
     inserted = 0
     for chunk in _batches(rows):
         ins = insert(Job).values(chunk)
-        updates = {"last_seen_at": ins.excluded.last_seen_at}
+        updates = {"last_seen_at": ins.excluded.last_seen_at,
+                   "skills": func.coalesce(Job.skills, ins.excluded.skills),
+                   "title_skills": func.coalesce(Job.title_skills, ins.excluded.title_skills)}
         if private_to is None:
             updates["private"] = False
         stmt = ins.on_conflict_do_update(index_elements=[Job.dedupe_key], set_=updates)

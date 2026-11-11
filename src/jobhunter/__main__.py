@@ -338,6 +338,16 @@ def cmd_set_titles(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rescore(_: argparse.Namespace) -> int:
+    """Find skills in jobs saved before Phase 4."""
+    from jobhunter.pipeline import backfill_job_skills
+
+    with _session() as session:
+        filled = backfill_job_skills(session)
+    print(f"Skills found for {filled} job(s).")
+    return 0
+
+
 def cmd_not_yet(args: argparse.Namespace) -> int:
     print(f"'{args.command}' is not implemented yet (see the roadmap).", file=sys.stderr)
     return 2
@@ -367,6 +377,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("heartbeat", help="send the weekly heartbeat now").set_defaults(
         func=cmd_heartbeat
     )
+    sub.add_parser("rescore", help="find skills in older jobs and re-score everyone").set_defaults(
+        func=cmd_rescore)
     sub.add_parser("backfill").set_defaults(func=cmd_not_yet)
     args = parser.parse_args(argv)
     return args.func(args)
