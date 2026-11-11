@@ -17,7 +17,7 @@
     <nav class="topnav" aria-label="Main">
       <a href="/" {% if page == "jobs" %}aria-current="page"{% endif %}>My jobs</a>
       <a href="/settings" {% if page == "settings" %}aria-current="page"{% endif %}>Settings</a>
-      {% if user.is_owner %}<a href="/admin" {% if page == "admin" %}aria-current="page"{% endif %}>Admin</a>{% endif %}
+      {% if user.is_owner or user.is_admin %}<a href="/admin" {% if page == "admin" %}aria-current="page"{% endif %}>Admin</a>{% endif %}
     </nav>
     <div class="usermenu">
       <span class="who">{{ user.name or user.email }}</span>

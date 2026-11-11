@@ -93,3 +93,55 @@ def test_list_users(db_session):
     rows = list_users(db_session)
     assert [r.email for r in rows] == [OWNER, "user1@gmail.com"]
     assert rows[0].is_owner and rows[0].titles >= 0 and rows[0].gmail is False
+
+
+# ---- invite-only list and admins (ALLOWED_EMAILS, ADMIN_EMAILS)
+
+from jobhunter.accounts import Access, email_set  # noqa: E402
+
+FRIEND = "friend@gmail.com"
+INVITE = Access(owner_email=OWNER, allowed=email_set(FRIEND))
+
+
+def test_email_set_parses_comma_list():
+    assert email_set(" Friend@Gmail.com, b@x.in ,,") == frozenset({FRIEND, "b@x.in"})
+    assert email_set("") == frozenset()
+
+
+def test_invited_user_signs_in(db_session):
+    result = sign_in(db_session, ident(1, "Friend@gmail.com"), OWNER, NOW, access=INVITE)
+    assert result.outcome == "ok"
+
+
+def test_uninvited_user_refused_and_not_created(db_session):
+    before = users(db_session)
+    result = sign_in(db_session, ident(1), OWNER, NOW, access=INVITE)
+    assert result.outcome == "invite-only" and result.user_id is None
+    assert users(db_session) == before
+
+
+def test_owner_always_gets_in(db_session):
+    assert sign_in(db_session, ident(9, OWNER), OWNER, NOW, access=INVITE).user_id == 1
+    assert sign_in(db_session, ident(9, OWNER), OWNER, NOW, access=INVITE).outcome == "ok"
+
+
+def test_user_removed_from_list_is_refused(db_session):
+    sign_in(db_session, ident(1), OWNER, NOW)  # signed up while sign-in was open
+    assert sign_in(db_session, ident(1), OWNER, NOW, access=INVITE).outcome == "invite-only"
+
+
+def test_admins_are_invited(db_session):
+    access = Access(owner_email=OWNER, allowed=email_set(FRIEND), admins=email_set("boss@x.in"))
+    assert sign_in(db_session, ident(1, "boss@x.in"), OWNER, NOW, access=access).outcome == "ok"
+
+
+def test_empty_list_keeps_sign_in_open():
+    assert Access().invited("anyone@x.in", is_owner=False)
+
+
+def test_is_admin():
+    access = Access(owner_email=OWNER, admins=email_set("Friend@gmail.com"))
+    assert access.is_admin(FRIEND, is_owner=False)
+    assert access.is_admin("whoever@x.in", is_owner=True)
+    assert not access.is_admin("other@x.in", is_owner=False)
+    assert not access.is_admin(None, is_owner=False)

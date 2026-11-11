@@ -1,5 +1,7 @@
 """Google sign-in (Firebase) for the web app, with a fake verifier and accounts."""
 
+from dataclasses import replace
+
 import pytest
 
 pytest.importorskip("fastapi")
@@ -148,3 +150,18 @@ def test_session_cookie_lasts_30_days(client):
     r = sign_in(client)
     cookie = r.headers["set-cookie"]
     assert "Max-Age=2592000" in cookie and "HttpOnly" in cookie.replace("httponly", "HttpOnly")
+
+
+def test_invite_only_outcome_goes_to_invite_only_page(client, accounts):
+    accounts.outcome = "invite-only"
+    assert sign_in(client, "someone").json() == {"next": "/invite-only"}
+    assert "invite-only" in client.get("/invite-only").text.lower()
+
+
+def test_session_of_user_no_longer_invited_is_ended(client, accounts):
+    sign_in(client, "someone")
+    uid = accounts.by_uid["someone"]
+    accounts.users[uid] = replace(accounts.users[uid], invited=False)
+    r = client.get("/settings", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/invite-only"
+    assert client.get("/settings", follow_redirects=False).headers["location"] == "/login"

@@ -1,5 +1,6 @@
 """Owner-only Admin page: users, blocking, sources and watchlist (fake stores)."""
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -137,3 +138,15 @@ def test_admin_needs_csrf(client, admin):
     sign_in(client, "owner")
     assert client.post("/admin/sources", data={"csrf": "forged"}).status_code == 403
     assert admin.saves == 0
+
+
+def test_admin_email_gets_admin_page(client, accounts, admin):
+    sign_in(client, "owner")  # the owner's account exists
+    sign_in(client, "friend")
+    uid = accounts.by_uid["friend"]
+    accounts.users[uid] = replace(accounts.users[uid], is_admin=True)
+    assert 'href="/admin"' in client.get("/settings").text
+    assert client.get("/admin").status_code == 200
+    r = client.post("/admin/users/1/block", data={"csrf": page_csrf(client, "/admin"),
+                                                   "blocked": "1"}, follow_redirects=False)
+    assert not accounts.users[1].blocked and r.status_code in (303, 400)

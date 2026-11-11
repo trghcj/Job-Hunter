@@ -109,6 +109,8 @@ data/                  default company watchlist, seeded into the database once
 | `RESEND_API_KEY` | [resend.com](https://resend.com). Without your own domain, Resend only delivers to the address you signed up with. |
 | `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `FIREBASE_APP_ID` | Firebase console → Project settings → your web app → **Config**. Turn on **Authentication → Google**, and add your Render domain under **Authentication → Settings → Authorized domains**. These four values are public; no Firebase private key is used. |
 | `OWNER_EMAIL` | Your Google sign-in email. That account becomes the owner: it gets the data from before accounts existed and the **Admin** page. |
+| `ALLOWED_EMAILS` | Optional. Comma-separated Google emails. When set, JobHunter is invite-only: only these accounts, the admins and the owner can sign in; anyone else sees "invite-only". Removing an address ends that person's sessions and extension connection. Empty = anyone with Google. |
+| `ADMIN_EMAILS` | Optional. Comma-separated Google emails that also get the **Admin** page (users, blocking, sources, watchlist). Nobody can block the owner. |
 | `SESSION_SECRET` | 32+ random characters: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
 | `ALERT_TO` (optional) | Where failure alerts go, so they still arrive if the database is down. |
 | `SETTINGS_KEY` | Encrypts the Gmail app password: `python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`. Use the same value locally, in GitHub Actions and on Render. |
@@ -161,7 +163,7 @@ $env:WEB_HTTPS_ONLY = "false"   # local http only; keep secure cookies online
 
 Then open http://localhost:8000 (`localhost` is an authorised Firebase domain by default) and click **Continue with Google**. Titles, cities and exclude words can be separated by commas or new lines. Saved changes apply on the next run.
 
-**Accounts and limits.** Sign-up is open to any Google account with a verified email, up to 50 users (later sign-ins see "JobHunter is full"; the owner always gets in), with at most 15 job titles each. The first sign-in with `OWNER_EMAIL` claims the owner account. To hand ownership to another account later, set `users.is_owner` in the database by hand.
+**Accounts and limits.** Sign-up is open to any Google account with a verified email (or only to `ALLOWED_EMAILS` when that is set), up to 50 users (later sign-ins see "JobHunter is full"; the owner always gets in), with at most 15 job titles each. The first sign-in with `OWNER_EMAIL` claims the owner account. To hand ownership to another account later, set `users.is_owner` in the database by hand.
 
 **Who gets email.** Resend's free plan without your own domain only delivers to your own address, so only the owner gets the daily email. Everyone else sees their matches on My jobs. Once you verify a domain in Resend, set `digest_from` in `app_settings` to an address on it (for example `JobHunter <jobs@yourdomain.in>`) and every user with a digest address gets an email too; no code change.
 
