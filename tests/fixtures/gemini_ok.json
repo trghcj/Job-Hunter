@@ -1,0 +1,22 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "[{\"id\": 1, \"fit\": 4, \"reason\": \"Strong Django and REST match; asks 1-2 years\"}, {\"id\": 2, \"fit\": 2, \"reason\": \"Mostly Java/Spring; little overlap with your Python\"}]"
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 812,
+    "candidatesTokenCount": 64,
+    "totalTokenCount": 876
+  },
+  "modelVersion": "gemini-2.5-flash"
+}
