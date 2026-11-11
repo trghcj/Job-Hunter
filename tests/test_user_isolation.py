@@ -101,3 +101,12 @@ def test_runs_hide_other_users_gmail_rows(db_session):
     db_session.commit()
     (sa,) = stores(db_session, a)
     assert {r.source for r in sa.recent_runs()} == {"adzuna", f"gmail_alerts:{a}"}
+
+
+def test_runs_hide_other_users_email_rows(db_session):
+    a, b = new_user(db_session, 1), new_user(db_session, 2)
+    for source in ("email", f"email:{a}", f"email:{b}"):
+        db_session.add(Run(source=source, started_at=NOW, ok=True))
+    db_session.commit()
+    (sa,) = stores(db_session, a)
+    assert {r.source for r in sa.recent_runs()} == {"email", f"email:{a}"}

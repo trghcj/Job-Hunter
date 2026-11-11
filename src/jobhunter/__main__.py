@@ -116,10 +116,15 @@ def _deliver(session: Session, user_id: int, digest, now, run_source: str = "ema
 def deliver_digests(session: Session, summary, now: datetime) -> list[str]:
     """Email each user's digest. The owner always; others only with your own sending
     domain (see _email_everyone). Returns problems; one failure does not stop the rest."""
+    from jobhunter.pipeline import UserResult
+
     owner = _owner_id(session)
     everyone = _email_everyone(session)
     problems: list[str] = []
-    for user_id, result in summary.users.items():
+    # The owner's "email" run row is always written (even with nothing to send), because
+    # backup runs (--once-per-day) look for it.
+    users = {owner: UserResult(), **summary.users}
+    for user_id, result in users.items():
         is_owner = user_id == owner
         if not (is_owner or everyone):
             continue
@@ -317,10 +322,12 @@ def cmd_test_email(_: argparse.Namespace) -> int:
 
 
 def cmd_set_titles(args: argparse.Namespace) -> int:
-    """Temporary until the settings page (step 7): set titles on the first active profile."""
+    """Set the owner's job titles (other users use the web app)."""
     with _session() as session:
         profile = session.scalars(
-            select(SearchProfile).where(SearchProfile.active.is_(True)).order_by(SearchProfile.id)
+            select(SearchProfile)
+            .where(SearchProfile.user_id == _owner_id(session), SearchProfile.active.is_(True))
+            .order_by(SearchProfile.id)
         ).first()
         if profile is None:
             print("No active search profile. Run `migrate` first.", file=sys.stderr)

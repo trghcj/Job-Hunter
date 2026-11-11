@@ -175,3 +175,27 @@ def test_resend_dev_sender_counts_as_no_domain(db_session, monkeypatch):
     set_setting(db_session, "digest_from", "JobHunter <onboarding@resend.dev>")
     sender, _ = _deliver(db_session, monkeypatch)
     assert sender.sent == [["owner@gmail.com"]]
+
+
+def test_owner_email_run_recorded_without_titles(db_session, monkeypatch):
+    """Backups (--once-per-day) must see today's run even if the owner has no titles."""
+    from jobhunter.pipeline import ran_successfully_today
+
+    user(db_session, 9, titles=(), owner=True)
+    user(db_session, 1)
+    _deliver(db_session, monkeypatch)
+    assert ran_successfully_today(db_session, NOW)
+
+
+def test_set_titles_command_edits_the_owners_profile(db_session, monkeypatch):
+    from sqlalchemy.orm import Session
+
+    from jobhunter.user_settings import load_active_searches
+
+    other = user(db_session, 1, titles=("AI Engineer",))  # this user's profile is older
+    owner = user(db_session, 9, titles=(), owner=True)
+    monkeypatch.setattr(cli, "_session", lambda: Session(db_session.get_bind()))
+    assert cli.main(["set-titles", "Data Engineer"]) == 0
+    db_session.expire_all()
+    assert load_active_searches(db_session, owner)[0].titles == ["Data Engineer"]
+    assert load_active_searches(db_session, other)[0].titles == ["AI Engineer"]
