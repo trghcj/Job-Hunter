@@ -130,3 +130,11 @@ def test_gmail_form_errors(fields):
 def test_empty_titles_allowed_but_warned_elsewhere():
     form, errors = parse_form(fields(titles=""), ["remote"])
     assert errors == [] and form.titles == []
+
+
+def test_more_than_15_titles_rejected():
+    many = "\n".join(f"Title {i}" for i in range(16))
+    _, errors = parse_form(fields(titles=many), ["remote"])
+    assert "At most 15 job titles." in errors
+    _, ok = parse_form(fields(titles="\n".join(f"Title {i}" for i in range(15))), ["remote"])
+    assert ok == []

@@ -7,7 +7,7 @@ from jobhunter.sources.catalog import SOURCE_LABELS
 from jobhunter.sources.watchlist import Company, parse_watchlist_text
 
 WORK_MODES = ("onsite", "hybrid", "remote")
-MAX_TITLES = 50
+MAX_TITLES = 15
 MAX_TITLE_LEN = 100
 MAX_RECIPIENTS = 5
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -91,7 +91,7 @@ def parse_form(
 
     titles = parse_lines(fields.get("titles"), commas=True)
     if len(titles) > MAX_TITLES:
-        errors.append(f"Use at most {MAX_TITLES} job titles.")
+        errors.append(f"At most {MAX_TITLES} job titles.")
     if any(len(t) > MAX_TITLE_LEN for t in titles):
         errors.append(f"Each job title must be at most {MAX_TITLE_LEN} characters.")
 

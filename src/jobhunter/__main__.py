@@ -44,9 +44,10 @@ def cmd_migrate(_: argparse.Namespace) -> int:
 
 
 def _recipients(session: Session) -> list[str]:
-    from jobhunter.user_settings import get_setting
+    from jobhunter.db import OWNER_PLACEHOLDER_ID
+    from jobhunter.user_settings import get_user_setting
 
-    to = get_setting(session, "digest_to", []) or []
+    to = get_user_setting(session, OWNER_PLACEHOLDER_ID, "digest_to", []) or []
     return [to] if isinstance(to, str) else list(to)
 
 
@@ -173,11 +174,12 @@ def _ran_today(session: Session, now: datetime) -> bool:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    from jobhunter.db import OWNER_PLACEHOLDER_ID
     from jobhunter.pipeline import DEFAULT_MAX_JOBS, run_pipeline
     from jobhunter.settings import get_settings
     from jobhunter.sources.registry import build_adapters
     from jobhunter.sources.watchlist import companies_from_setting
-    from jobhunter.user_settings import get_setting
+    from jobhunter.user_settings import get_setting, get_user_setting
 
     now = datetime.now(UTC)
     problems: list[str] = []
@@ -189,8 +191,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             session.close()
             return 0
         sources = get_setting(session, "sources", {}) or {}
-        digest_cfg = get_setting(session, "digest", {}) or {}
-        max_age = int(get_setting(session, "max_age_days", 14))
+        digest_cfg = get_user_setting(session, OWNER_PLACEHOLDER_ID, "digest", {}) or {}
+        max_age = int(get_user_setting(session, OWNER_PLACEHOLDER_ID, "max_age_days", 14))
         watchlist = companies_from_setting(get_setting(session, "company_watchlist", []))
         adapters = build_adapters(session, get_settings(), sources, watchlist)
         if not adapters:
@@ -242,10 +244,11 @@ def cmd_heartbeat(_: argparse.Namespace) -> int:
 
 def cmd_set_email(args: argparse.Namespace) -> int:
     """Temporary until the settings page: where the digest goes."""
-    from jobhunter.user_settings import set_setting
+    from jobhunter.db import OWNER_PLACEHOLDER_ID
+    from jobhunter.user_settings import set_user_setting
 
     with _session() as session:
-        set_setting(session, "digest_to", args.addresses)
+        set_user_setting(session, OWNER_PLACEHOLDER_ID, "digest_to", args.addresses)
     print(f"Digest will be sent to: {', '.join(args.addresses)}")
     return 0
 

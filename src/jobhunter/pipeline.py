@@ -288,7 +288,7 @@ def run_pipeline(
 ) -> RunSummary:
     now = now or datetime.now(UTC)
     summary = RunSummary()
-    searches = [s for s in load_active_searches(session) if s.titles]
+    searches = [s for s in load_active_searches(session, OWNER_PLACEHOLDER_ID) if s.titles]
     if not searches:
         log.warning("No active search profile has titles; nothing to search for")
         return summary

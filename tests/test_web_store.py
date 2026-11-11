@@ -21,5 +21,5 @@ def test_store_round_trip_feeds_the_pipeline(db_session):
     assert again.titles == ["Python Developer"] and again.max_jobs == 10
     assert again.digest_to == ["me@example.com"] and again.max_age_days == 7
 
-    searches = load_active_searches(db_session)
+    searches = load_active_searches(db_session, 1)
     assert searches[0].titles == ["Python Developer"] and searches[0].max_years == 2

@@ -45,10 +45,12 @@ class BrokenSource:
 
 def _gmail(session: Session, settings: Settings) -> SourceAdapter | None:
     from jobhunter.crypto import CryptoError
+    from jobhunter.db import OWNER_PLACEHOLDER_ID
     from jobhunter.mail_account import gmail_adapter
 
     try:
-        return gmail_adapter(session, settings.settings_key.get_secret_value())
+        return gmail_adapter(session, OWNER_PLACEHOLDER_ID,
+                             settings.settings_key.get_secret_value())
     except CryptoError as exc:
         return BrokenSource("gmail_alerts", str(exc))
 

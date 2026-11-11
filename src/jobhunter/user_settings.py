@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from jobhunter.db import OWNER_PLACEHOLDER_ID, AppSetting, SearchProfile
+from jobhunter.db import OWNER_PLACEHOLDER_ID, AppSetting, SearchProfile, User, UserSetting
 from jobhunter.sources.base import Search
 
 log = logging.getLogger(__name__)
@@ -54,20 +54,35 @@ def load_defaults(path: Path = DEFAULT_CONFIG) -> tuple[dict[str, Any], dict[str
     return profile, settings
 
 
+# Settings each user has for themselves (user_settings); everything else is shared.
+USER_KEYS = ("digest", "digest_to", "max_age_days")
+
+
 def seed_defaults(session: Session, path: Path = DEFAULT_CONFIG) -> None:
-    """Insert defaults that are missing. Never overwrites what the user has saved."""
+    """Insert defaults that are missing. Never overwrites what anyone has saved.
+    Shared settings go to app_settings; config.yaml's personal ones go to the owner."""
     profile, settings = load_defaults(path)
-
-    if session.scalar(select(func.count()).select_from(SearchProfile)) == 0:
-        session.add(SearchProfile(name="default", active=True, user_id=OWNER_PLACEHOLDER_ID,
-                                  **profile))
-        log.info("Seeded default search profile")
-
+    if session.get(User, OWNER_PLACEHOLDER_ID) is not None:
+        seed_user(session, OWNER_PLACEHOLDER_ID, profile)
     for key, value in settings.items():
-        stmt = insert(AppSetting).values(key=key, value=value).on_conflict_do_nothing()
-        session.execute(stmt)
+        if key in USER_KEYS:
+            stmt = insert(UserSetting).values(user_id=OWNER_PLACEHOLDER_ID, key=key, value=value)
+        else:
+            stmt = insert(AppSetting).values(key=key, value=value)
+        session.execute(stmt.on_conflict_do_nothing())
     session.commit()
     seed_watchlist(session)
+
+
+def seed_user(session: Session, user_id: int, profile: dict[str, Any] | None = None) -> None:
+    """Give a user one active search profile (empty titles by default) if they have none."""
+    has = select(func.count()).select_from(SearchProfile).where(SearchProfile.user_id == user_id)
+    if session.scalar(has):
+        return
+    values = copy.deepcopy(profile if profile is not None else BUILTIN_PROFILE)
+    session.add(SearchProfile(name="default", active=True, user_id=user_id, **values))
+    session.commit()
+    log.info("Seeded default search profile for user %d", user_id)
 
 
 def seed_watchlist(session: Session) -> None:
@@ -106,11 +121,28 @@ def profile_to_search(row: SearchProfile) -> Search:
     )
 
 
-def load_active_searches(session: Session) -> list[Search]:
+def load_active_searches(session: Session, user_id: int) -> list[Search]:
     rows = session.scalars(
-        select(SearchProfile).where(SearchProfile.active.is_(True)).order_by(SearchProfile.id)
+        select(SearchProfile)
+        .where(SearchProfile.user_id == user_id, SearchProfile.active.is_(True))
+        .order_by(SearchProfile.id)
     )
     return [profile_to_search(r) for r in rows]
+
+
+def active_user_searches(session: Session) -> dict[int, list[Search]]:
+    """Searches with titles of every user who is not blocked, by user id (ascending)."""
+    rows = session.scalars(
+        select(SearchProfile)
+        .join(User, User.id == SearchProfile.user_id)
+        .where(SearchProfile.active.is_(True), User.blocked.is_(False))
+        .order_by(SearchProfile.user_id, SearchProfile.id)
+    )
+    found: dict[int, list[Search]] = {}
+    for row in rows:
+        if row.titles:
+            found.setdefault(row.user_id, []).append(profile_to_search(row))
+    return found
 
 
 def get_setting(session: Session, key: str, default: Any = None) -> Any:
@@ -121,4 +153,16 @@ def get_setting(session: Session, key: str, default: Any = None) -> Any:
 def set_setting(session: Session, key: str, value: Any) -> None:
     stmt = insert(AppSetting).values(key=key, value=value)
     session.execute(stmt.on_conflict_do_update(index_elements=["key"], set_={"value": value}))
+    session.commit()
+
+
+def get_user_setting(session: Session, user_id: int, key: str, default: Any = None) -> Any:
+    row = session.get(UserSetting, (user_id, key))
+    return default if row is None else row.value
+
+
+def set_user_setting(session: Session, user_id: int, key: str, value: Any) -> None:
+    stmt = insert(UserSetting).values(user_id=user_id, key=key, value=value)
+    session.execute(stmt.on_conflict_do_update(index_elements=["user_id", "key"],
+                                               set_={"value": value}))
     session.commit()

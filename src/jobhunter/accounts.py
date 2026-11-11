@@ -69,8 +69,10 @@ def _member_count(session: Session) -> int:
 
 
 def _on_new_user(session: Session, user_id: int) -> None:
-    """First-time setup for a user (a default search profile arrives with per-user settings)."""
-    return None
+    """First-time setup for a user: a default search profile."""
+    from jobhunter.user_settings import seed_user
+
+    seed_user(session, user_id)
 
 
 def sign_in(session: Session, identity: Identity, owner_email: str, now: datetime,
