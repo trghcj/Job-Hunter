@@ -10,23 +10,25 @@
       setTimeout, clearTimeout }) {
       Object.assign(this, { readJob, send, render, renderMatches, location, isVisible,
         autoCheck, setTimeout, clearTimeout });
-      this.lastHref = null;
+      this.lastKey = undefined;
       this.job = null;
       this.requestId = 0;
     }
 
-    // Called every second: re-read the page only when its address changed.
+    // Called every second: reads the open page (no network) and checks again only when the
+    // job shown changed. The address alone is not enough: Indeed's home page keeps it when
+    // you open another job, and LinkedIn changes it before the job panel has loaded.
     async tick() {
       if (!this.isVisible()) return;
-      const href = this.location().href;
-      if (href === this.lastHref) return;
-      this.lastHref = href;
-      await this.refresh(false);
+      const job = this.readJob();
+      const key = job ? [job.url, job.title, job.company].join("\n") : "";
+      if (key === this.lastKey) return;
+      this.lastKey = key;
+      await this.refresh(false, job);
     }
 
-    async refresh(force) {
+    async refresh(force, job = this.readJob()) {
       const id = ++this.requestId;
-      const job = this.readJob();
       this.job = job;
       if (!job) {
         this.render(JH.viewModel({ kind: "nojob" }));

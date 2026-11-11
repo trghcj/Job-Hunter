@@ -1,4 +1,4 @@
-// The page watcher: checks the open job when the URL changes, at most once a second and only
+// The page watcher: checks the open job when the job shown changes, at most once a second and only
 // while the tab is visible; ignores late answers for a job you already left.
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -145,4 +145,32 @@ test("opening the panel loads latest matches", async () => {
   await env.watcher.opened();
   assert.deepEqual(env.sent, [{ type: "matches", limit: 5 }]);
   assert.deepEqual(last(env).matches, [{ title: "X", company: "Y", url: "https://x.example" }]);
+});
+
+// Found on real pages: Indeed's home page keeps the same address when you open another job,
+// and LinkedIn changes the address before the job panel has loaded.
+
+test("another job opened without an address change is checked (Indeed home)", async () => {
+  const env = setup();
+  await env.watcher.tick();
+  env.job = JOB_B;
+  await env.watcher.tick();
+  assert.deepEqual(env.sent.map((m) => m.job.title), ["A", "B"]);
+});
+
+test("job details that appear after the address changed are checked (LinkedIn pane)", async () => {
+  const env = setup({ job: null });
+  await env.watcher.tick();
+  assert.equal(last(env).headline, "Open a job to check it");
+  env.job = JOB_A;
+  await env.watcher.tick();
+  assert.deepEqual(env.sent.map((m) => m.job.title), ["A"]);
+});
+
+test("same job under a new address is not checked again", async () => {
+  const env = setup();
+  await env.watcher.tick();
+  env.href = "https://jobs.lever.co/a/1?utm_source=x";
+  await env.watcher.tick();
+  assert.equal(env.sent.length, 1);
 });
