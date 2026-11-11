@@ -3,15 +3,17 @@ and env secrets. A source missing from the settings uses its default (on, except
 it needs something you have not set up yet)."""
 
 import logging
+from collections.abc import Iterator
 from typing import Any
 
 from sqlalchemy.orm import Session
 
+from jobhunter.models import RawJob
 from jobhunter.settings import Settings
 from jobhunter.sources import adzuna
 from jobhunter.sources.amazon import AmazonAdapter
 from jobhunter.sources.ashby import AshbyAdapter
-from jobhunter.sources.base import SourceAdapter
+from jobhunter.sources.base import Search, SourceAdapter
 from jobhunter.sources.catalog import is_enabled
 from jobhunter.sources.greenhouse import GreenhouseAdapter
 from jobhunter.sources.lever import LeverAdapter
@@ -27,6 +29,28 @@ log = logging.getLogger(__name__)
 BOARD_ADAPTERS = (
     GreenhouseAdapter, LeverAdapter, AshbyAdapter, WorkdayAdapter, SmartRecruitersAdapter
 )
+
+
+class BrokenSource:
+    """Stands in for a source that cannot start, so the run records why and alerts you."""
+
+    def __init__(self, name: str, problem: str) -> None:
+        self.name = name
+        self.problem = problem
+
+    def fetch(self, search: Search) -> Iterator[RawJob]:
+        raise RuntimeError(self.problem)
+        yield  # pragma: no cover  (makes this a generator)
+
+
+def _gmail(session: Session, settings: Settings) -> SourceAdapter | None:
+    from jobhunter.crypto import CryptoError
+    from jobhunter.mail_account import gmail_adapter
+
+    try:
+        return gmail_adapter(session, settings.settings_key.get_secret_value())
+    except CryptoError as exc:
+        return BrokenSource("gmail_alerts", str(exc))
 
 
 def build_adapters(
@@ -57,6 +81,10 @@ def build_adapters(
         adapters.append(RemoteOKAdapter())
     if is_enabled(sources, "amazon"):
         adapters.append(AmazonAdapter())
+    if is_enabled(sources, "gmail_alerts") and session is not None:
+        gmail = _gmail(session, settings)
+        if gmail is not None:
+            adapters.append(gmail)
 
     if not adapters:
         log.warning("No job sources are enabled")

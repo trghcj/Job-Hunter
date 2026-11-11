@@ -30,7 +30,7 @@ def test_migration_creates_all_five_tables_and_indexes():
 
 
 def test_orm_models_cover_same_tables():
-    expected = [*TABLES, "search_profiles", "app_settings", "api_usage"]
+    expected = [*TABLES, "search_profiles", "app_settings", "api_usage", "mail_accounts"]
     assert sorted(Base.metadata.tables) == sorted(expected)
 
 

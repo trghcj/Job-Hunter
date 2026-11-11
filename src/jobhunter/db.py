@@ -14,6 +14,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     SmallInteger,
     Text,
     create_engine,
@@ -145,6 +146,18 @@ class SearchProfile(Base):
     max_years: Mapped[int] = mapped_column(SmallInteger, server_default="1")
     exclude_words: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")
     active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+
+
+class MailAccount(Base):
+    """Gmail account for job-alert emails. The app password is stored encrypted only."""
+
+    __tablename__ = "mail_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    gmail_address: Mapped[str] = mapped_column(Text)
+    app_password_enc: Mapped[bytes] = mapped_column(LargeBinary)
+    senders: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")
+    last_checked: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class AppSetting(Base):

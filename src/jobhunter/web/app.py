@@ -19,11 +19,15 @@ from starlette.middleware.sessions import SessionMiddleware
 from jobhunter.settings import Settings, get_settings
 from jobhunter.sources.catalog import SOURCE_LABELS
 from jobhunter.sources.watchlist import format_watchlist
-from jobhunter.web.forms import WORK_MODES, parse_form
+from jobhunter.web.forms import WORK_MODES, parse_form, parse_gmail_form
 from jobhunter.web.store import DbSettingsStore, SettingsStore
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 SESSION_DAYS = 7
+GMAIL_NOTICES = {
+    "saved": "Gmail saved. Use Test connection to check it.",
+    "removed": "Gmail account removed.",
+}
 SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
@@ -68,7 +72,8 @@ def create_app(
     if store is None:
         from jobhunter.db import make_engine
 
-        store = DbSettingsStore(sessionmaker(make_engine()))
+        store = DbSettingsStore(sessionmaker(make_engine()),
+                                settings_key=settings.settings_key.get_secret_value())
 
     app = FastAPI(title="JobHunter settings", docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(
@@ -118,7 +123,8 @@ def create_app(
         return _see_other("/login")
 
     def render_settings(request: Request, form, errors=(), saved=False, status=200,
-                        watchlist_text: str | None = None):
+                        watchlist_text: str | None = None, gmail_errors=(),
+                        gmail_message: str | None = None):
         ctx = {
             "csrf": _csrf(request),
             "form": form,
@@ -129,6 +135,9 @@ def create_app(
             "watchlist_text": (
                 watchlist_text if watchlist_text is not None else format_watchlist(form.watchlist)
             ),
+            "mail": store.load_mail(),
+            "gmail_errors": list(gmail_errors),
+            "gmail_message": gmail_message,
             "runs": store.recent_runs(),
         }
         return TEMPLATES.TemplateResponse(request, "settings.html", ctx, status_code=status)
@@ -138,7 +147,48 @@ def create_app(
         if not _logged_in(request):
             return _see_other("/login")
         saved = request.query_params.get("saved") == "1"
-        return render_settings(request, store.load(), saved=saved)
+        message = GMAIL_NOTICES.get(request.query_params.get("gmail", ""))
+        return render_settings(request, store.load(), saved=saved, gmail_message=message)
+
+    async def _checked_form(request: Request):
+        """The posted form if logged in with a valid CSRF token, else the response to send."""
+        if not _logged_in(request):
+            return None, _see_other("/login")
+        data = await request.form()
+        if not _csrf_ok(request, data.get("csrf")):
+            return None, Response("Form expired, reload the page.", status_code=403)
+        return data, None
+
+    @app.post("/gmail")
+    async def save_gmail(request: Request):
+        data, early = await _checked_form(request)
+        if early:
+            return early
+        fields = {k: str(v) for k, v in data.items() if isinstance(v, str)}
+        address, app_password, senders, errors = parse_gmail_form(fields)
+        if not errors:
+            try:
+                store.save_mail(address, app_password, senders)
+            except ValueError as exc:
+                errors = [str(exc)]
+        if errors:
+            return render_settings(request, store.load(), gmail_errors=errors, status=400)
+        return _see_other("/?gmail=saved#gmail")
+
+    @app.post("/gmail/test")
+    async def test_gmail(request: Request):
+        data, early = await _checked_form(request)
+        if early:
+            return early
+        return render_settings(request, store.load(), gmail_message=store.test_mail())
+
+    @app.post("/gmail/delete")
+    async def delete_gmail(request: Request):
+        data, early = await _checked_form(request)
+        if early:
+            return early
+        store.delete_mail()
+        return _see_other("/?gmail=removed#gmail")
 
     @app.post("/")
     async def save_settings(request: Request):

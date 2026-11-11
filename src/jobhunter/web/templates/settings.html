@@ -83,6 +83,35 @@
   <p><button type="submit">Save settings</button></p>
 </form>
 
+<div class="card" id="gmail">
+  <h2>Gmail job alerts</h2>
+  {% if gmail_message %}<div class="msg {{ 'bad' if gmail_message.startswith('Not connected') else 'ok' }}">{{ gmail_message }}</div>{% endif %}
+  {% if gmail_errors %}<div class="msg bad">{% for e in gmail_errors %}<div>{{ e }}</div>{% endfor %}</div>{% endif %}
+  <p class="hint">JobHunter reads your LinkedIn and Naukri job-alert emails from this Gmail every day and labels each one <b>JobHunter</b> once read. It needs a Google <b>app password</b> (Google Account → Security → 2-Step Verification → App passwords), not your normal password. The app password is stored encrypted and is never shown again.</p>
+  <form method="post" action="/gmail">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="row">
+      <div>
+        <label for="gmail_address">Gmail address</label>
+        <input id="gmail_address" name="gmail_address" type="email" value="{{ mail.address }}" placeholder="you@gmail.com" required>
+      </div>
+      <div>
+        <label for="app_password">App password</label>
+        <input id="app_password" name="app_password" type="password" autocomplete="new-password" placeholder="{{ 'Saved. Leave blank to keep it' if mail.has_password else '16 letters from Google' }}">
+      </div>
+    </div>
+    <label for="senders">Read emails from <span class="hint">addresses or domains, comma or one per line</span></label>
+    <textarea id="senders" name="senders" rows="2">{{ mail.senders | join(', ') }}</textarea>
+    <p><button type="submit">Save Gmail</button></p>
+  </form>
+  {% if mail.has_password %}
+  <div class="checks">
+    <form method="post" action="/gmail/test"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Test connection</button></form>
+    <form method="post" action="/gmail/delete"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">Remove Gmail account</button></form>
+  </div>
+  {% endif %}
+</div>
+
 <div class="card">
   <h2>Recent runs</h2>
   {% if runs %}

@@ -5,6 +5,7 @@ import pytest
 pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
+from jobhunter.mail_account import MailView  # noqa: E402
 from jobhunter.settings import Settings  # noqa: E402
 from jobhunter.web.app import create_app  # noqa: E402
 from jobhunter.web.forms import ProfileForm  # noqa: E402
@@ -31,6 +32,25 @@ class FakeStore:
 
     def recent_runs(self, limit=8):
         return [RunRow("adzuna", None, False, 50, 0, "AdzunaError: HTTP 503")]
+
+    mail = MailView()
+    saved_password = None
+    test_result = "Connected. 3 job-alert emails are waiting to be read."
+
+    def load_mail(self):
+        return self.mail
+
+    def save_mail(self, address, app_password, senders):
+        if app_password is None and not self.mail.has_password:
+            raise ValueError("Enter the Gmail app password the first time you save.")
+        self.saved_password = app_password or self.saved_password
+        self.mail = MailView(address, True, tuple(senders))
+
+    def delete_mail(self):
+        self.mail = MailView()
+
+    def test_mail(self):
+        return self.test_result
 
 
 def settings(**kw) -> Settings:
@@ -151,6 +171,48 @@ def test_bad_watchlist_keeps_what_you_typed(client, store):
     r = client.post("/", data=data)
     assert r.status_code == 400 and "Watchlist line 1" in r.text
     assert "Groww | workday | groww" in r.text and store.saves == 0
+
+
+def test_gmail_save_never_shows_the_password(client, store):
+    token = login(client)
+    r = client.post("/gmail", data={"csrf": token, "gmail_address": "me@gmail.com",
+                                    "app_password": "abcd efgh ijkl mnop",
+                                    "senders": "naukri.com"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/?gmail=saved")
+    assert store.saved_password == "abcdefghijklmnop"
+    page = client.get("/?gmail=saved").text
+    assert "Gmail saved" in page and "me@gmail.com" in page
+    assert "abcdefghijklmnop" not in page and "abcd efgh" not in page
+    assert "Leave blank to keep it" in page and "Test connection" in page
+
+
+def test_gmail_first_save_needs_password(client, store):
+    token = login(client)
+    r = client.post("/gmail", data={"csrf": token, "gmail_address": "me@gmail.com"})
+    assert r.status_code == 400 and "first time" in r.text
+
+
+def test_gmail_bad_app_password_rejected(client, store):
+    token = login(client)
+    r = client.post("/gmail", data={"csrf": token, "gmail_address": "me@gmail.com",
+                                    "app_password": "my password 123"})
+    assert r.status_code == 400 and "16 letters" in r.text
+    assert store.saved_password is None
+
+
+def test_gmail_test_connection_and_remove(client, store):
+    store.mail = MailView("me@gmail.com", True)
+    token = login(client)
+    r = client.post("/gmail/test", data={"csrf": token})
+    assert "3 job-alert emails are waiting" in r.text
+    client.post("/gmail/delete", data={"csrf": token})
+    assert store.mail.has_password is False
+
+
+def test_gmail_routes_need_login_and_csrf(client):
+    assert client.post("/gmail/test", data={}, follow_redirects=False).status_code == 303
+    login(client)
+    assert client.post("/gmail/test", data={"csrf": "forged"}).status_code == 403
 
 
 def test_save_without_csrf_rejected(client, store):

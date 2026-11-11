@@ -1,4 +1,6 @@
-from jobhunter.web.forms import ProfileForm, parse_form, parse_lines
+import pytest
+
+from jobhunter.web.forms import ProfileForm, parse_form, parse_gmail_form, parse_lines
 
 
 def fields(**overrides) -> dict[str, str]:
@@ -97,6 +99,32 @@ def test_no_sources_rejected_and_bad_watchlist_line_reported():
 def test_sources_default_to_all_on_when_not_submitted():
     form, _ = parse_form(fields(), ["remote"])
     assert all(form.sources.values())
+
+
+def test_gmail_form_valid_with_spaced_app_password():
+    address, password, senders, errors = parse_gmail_form({
+        "gmail_address": " Me@Gmail.com ", "app_password": "abcd efgh ijkl mnop",
+        "senders": "jobalerts-noreply@linkedin.com, naukri.com",
+    })
+    assert errors == []
+    assert address == "me@gmail.com" and password == "abcdefghijklmnop"
+    assert senders == ["jobalerts-noreply@linkedin.com", "naukri.com"]
+
+
+def test_gmail_form_blank_password_keeps_saved_and_defaults_senders():
+    _, password, senders, errors = parse_gmail_form({"gmail_address": "me@gmail.com"})
+    assert errors == [] and password is None
+    assert "naukri.com" in senders
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [{"gmail_address": "not-an-email"},
+     {"gmail_address": "me@gmail.com", "app_password": "my real password 1"},
+     {"gmail_address": "me@gmail.com", "senders": "linkedin"}],
+)
+def test_gmail_form_errors(fields):
+    assert parse_gmail_form(fields)[3]
 
 
 def test_empty_titles_allowed_but_warned_elsewhere():

@@ -10,6 +10,7 @@ SOURCE_LABELS = {
     "workday": "Workday careers pages",
     "smartrecruiters": "SmartRecruiters careers pages",
     "amazon": "Amazon jobs",
+    "gmail_alerts": "Gmail job alerts (LinkedIn, Naukri)",
     "remotive": "Remotive (remote)",
     "remoteok": "Remote OK (remote)",
 }

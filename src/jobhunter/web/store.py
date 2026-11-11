@@ -7,8 +7,11 @@ from typing import Protocol
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from jobhunter.crypto import CryptoError
 from jobhunter.db import Run, SearchProfile
+from jobhunter.mail_account import MailView, delete_account, gmail_adapter, mail_view, save_account
 from jobhunter.sources.catalog import SOURCE_LABELS, is_enabled
+from jobhunter.sources.gmail_alerts import GmailError
 from jobhunter.sources.watchlist import companies_from_setting, companies_to_setting
 from jobhunter.user_settings import BUILTIN_PROFILE, get_setting, seed_defaults, set_setting
 from jobhunter.web.forms import ProfileForm
@@ -31,6 +34,10 @@ class SettingsStore(Protocol):
     def load(self) -> ProfileForm: ...
     def save(self, form: ProfileForm) -> None: ...
     def recent_runs(self, limit: int = 8) -> list[RunRow]: ...
+    def load_mail(self) -> MailView: ...
+    def save_mail(self, address: str, app_password: str | None, senders: list[str]) -> None: ...
+    def delete_mail(self) -> None: ...
+    def test_mail(self) -> str: ...
 
 
 def _active_profile(session: Session) -> SearchProfile | None:
@@ -40,8 +47,34 @@ def _active_profile(session: Session) -> SearchProfile | None:
 
 
 class DbSettingsStore:
-    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+    def __init__(self, session_factory: sessionmaker[Session], settings_key: str = "") -> None:
         self._sessions = session_factory
+        self._key = settings_key
+
+    # ---- Gmail account (password is write-only from the page's point of view)
+
+    def load_mail(self) -> MailView:
+        with self._sessions() as session:
+            return mail_view(session)
+
+    def save_mail(self, address: str, app_password: str | None, senders: list[str]) -> None:
+        with self._sessions() as session:
+            save_account(session, address, app_password, senders, self._key)
+
+    def delete_mail(self) -> None:
+        with self._sessions() as session:
+            delete_account(session)
+
+    def test_mail(self) -> str:
+        with self._sessions() as session:
+            try:
+                adapter = gmail_adapter(session, self._key)
+                if adapter is None:
+                    return "Save a Gmail account first."
+                waiting = adapter.count_waiting()
+            except (CryptoError, GmailError) as exc:
+                return f"Not connected: {exc}"
+        return f"Connected. {waiting} job-alert emails are waiting to be read."
 
     def load(self) -> ProfileForm:
         with self._sessions() as session:

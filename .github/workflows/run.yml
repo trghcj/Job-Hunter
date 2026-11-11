@@ -27,6 +27,7 @@ jobs:
       ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       ALERT_TO: ${{ secrets.ALERT_TO }}
+      SETTINGS_KEY: ${{ secrets.SETTINGS_KEY }} # decrypts the saved Gmail app password
     steps:
       - uses: actions/checkout@v5
 

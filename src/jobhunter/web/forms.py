@@ -28,6 +28,27 @@ class ProfileForm:
     watchlist: list[Company] = field(default_factory=list)
 
 
+_SENDER = re.compile(r"^[\w.+-]+@[\w.-]+\.\w+$|^[\w-]+(\.[\w-]+)+$")
+
+
+def parse_gmail_form(fields: dict[str, str]) -> tuple[str, str | None, list[str], list[str]]:
+    """(address, app password or None to keep the saved one, senders, errors)."""
+    from jobhunter.sources.gmail_alerts import DEFAULT_SENDERS
+
+    errors: list[str] = []
+    address = (fields.get("gmail_address") or "").strip().lower()
+    if not _EMAIL.match(address):
+        errors.append("Enter the Gmail address your job alerts go to.")
+    password = "".join((fields.get("app_password") or "").split())
+    if password and not re.fullmatch(r"[A-Za-z]{16}", password):
+        errors.append("The app password is the 16 letters Google shows (spaces are fine).")
+    senders = parse_lines(fields.get("senders"), commas=True) or list(DEFAULT_SENDERS)
+    bad = [s for s in senders if not _SENDER.match(s)]
+    if bad:
+        errors.append(f"Senders must be email addresses or domains: {', '.join(bad)}")
+    return address, password or None, [s.lower() for s in senders], errors
+
+
 def parse_lines(text: str | None, commas: bool = False) -> list[str]:
     """One item per line (and per comma if asked); trimmed, deduped ignoring case."""
     raw = re.split(r"[\n,]" if commas else r"\n", text or "")

@@ -50,6 +50,9 @@ Until embedding and LLM scoring arrive (Phase 4), the score is 1.0 minus 0.1 for
 | Workday | The public JSON each Workday careers site loads, no login | Uses the site's own India filter so jobs come newest first, stops at jobs older than the age limit (at most 5 pages), for example Nvidia, Adobe, Salesforce, Intel, Cisco, Visa, Citi, Mastercard. |
 | Amazon | amazon.jobs search JSON, newest first | Up to 300 newest India jobs per run. |
 | Remotive, Remote OK | Public feeds, one call per run | Only roles open to India or worldwide. Links point back to the source, as their terms require. |
+| LinkedIn and Naukri job alerts | Your own Gmail over IMAP, with a Google app password | Reads alert emails from the configured senders, parses the jobs from their links, and labels each email `JobHunter` so it is read once. JobHunter never logs in to LinkedIn or Naukri. |
+
+**Setting up job alerts:** one alert per site is enough. On LinkedIn, search with OR, for example `"software engineer" OR "backend" OR "python" OR "AI engineer" OR "data engineer"`, set the location to India, and switch on the alert. On Naukri, enter the roles comma-separated in one search and create a job alert. Then, on the settings page, add the Gmail address the alerts go to and a Google **app password** (needs 2-Step Verification), and click **Test connection**. The app password is stored encrypted with `SETTINGS_KEY`, which must be the same in `.env`, GitHub Actions secrets and Render.
 
 For the careers sites, a job is kept only if the title matches, it is in India or remote-open-to-India (plain "Remote" on a global company's board is skipped because it is almost always US-only), and the title is not too senior for your experience range. The description is fetched only after those checks, to keep requests few. One broken site is skipped; a source fails only if most of its sites fail.
 
@@ -107,6 +110,7 @@ data/                  default company watchlist, seeded into the database once
 | `WEB_PASSWORD` | Any long password, for the settings page. |
 | `SESSION_SECRET` | 32+ random characters: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
 | `ALERT_TO` (optional) | Where failure alerts go, so they still arrive if the database is down. |
+| `SETTINGS_KEY` | Encrypts the Gmail app password: `python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`. Use the same value locally, in GitHub Actions and on Render. |
 | `TEST_DATABASE_URL` (optional) | A **local** Postgres database for the database tests. Never the hosted one. |
 
 ### 2. Install and configure
@@ -158,7 +162,7 @@ Security: a single password compared in constant time, a 1-second delay after a 
 
 ## Deployment
 
-**Daily run (GitHub Actions).** Add these repository secrets under *Settings → Secrets and variables → Actions*: `DATABASE_URL`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `RESEND_API_KEY` and optionally `ALERT_TO`. The workflow in [.github/workflows/run.yml](.github/workflows/run.yml) is scheduled at 7:43 AM IST, with backups at 9:13 and 11:43 AM IST. GitHub can delay scheduled runs, and at busy times (especially the top of the hour) it can drop them, so the main time is off the hour and every scheduled run uses `--once-per-day`: a backup only works if no run has succeeded yet that day, so you never get two digests. The **Run workflow** button on the Actions tab always runs.
+**Daily run (GitHub Actions).** Add these repository secrets under *Settings → Secrets and variables → Actions*: `DATABASE_URL`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `RESEND_API_KEY`, `SETTINGS_KEY` and optionally `ALERT_TO`. The workflow in [.github/workflows/run.yml](.github/workflows/run.yml) is scheduled at 7:43 AM IST, with backups at 9:13 and 11:43 AM IST. GitHub can delay scheduled runs, and at busy times (especially the top of the hour) it can drop them, so the main time is off the hour and every scheduled run uses `--once-per-day`: a backup only works if no run has succeeded yet that day, so you never get two digests. The **Run workflow** button on the Actions tab always runs.
 
 **Settings page (Render).** In the Render dashboard choose **New → Blueprint**, pick this repository, and enter `DATABASE_URL` and `WEB_PASSWORD` when asked; Render generates `SESSION_SECRET`. [render.yaml](render.yaml) deploys a free web service in Singapore and redeploys on every push to `main`. Free services sleep when idle, so the first visit after a break takes up to a minute. The daily run does not depend on the page.
 
@@ -174,7 +178,8 @@ Tests make no network calls: API responses are replayed from `tests/fixtures/`, 
 ## Safety rules
 
 - Secrets live only in `.env`, GitHub Actions secrets and Render. Error messages and alert emails never contain API keys, URLs with keys, or database passwords.
-- A logged-in LinkedIn account is never automated. LinkedIn jobs will come only from LinkedIn's own alert emails (Phase 3).
+- LinkedIn and Naukri accounts are never logged into or automated, and their sites are never scraped. Their jobs come only from their own alert emails in your Gmail.
+- The Gmail app password is stored encrypted and is never shown, logged or put in an error message.
 - Job text sent to an LLM (Phase 4) will never include personal details.
 
 ## Roadmap
@@ -184,7 +189,7 @@ Tests make no network calls: API responses are replayed from `tests/fixtures/`, 
 | 0 | Done | Project skeleton, settings, database migrations |
 | 1 | Done | Adzuna adapter, normalizer, filters, digest email, settings page on Render |
 | 2 | In progress | Daily GitHub Actions run, failure alerts, weekly heartbeat (waiting on the first scheduled run) |
-| 3 | In progress | Done: careers sites (Greenhouse, Lever, Ashby, Workday, SmartRecruiters) from an editable 125-company watchlist; Amazon; Remotive and Remote OK. Next: LinkedIn, Naukri and Indeed alert emails read from Gmail |
+| 3 | In progress | Done: careers sites (Greenhouse, Lever, Ashby, Workday, SmartRecruiters) from an editable 125-company watchlist; Amazon; Remotive and Remote OK; Gmail alert reader with LinkedIn and Naukri parsers. Next: check the parsers against real alert emails |
 | — | Planned | Chrome companion extension: reads the job cards you open on LinkedIn, Naukri or Indeed (no automatic browsing), highlights matches using the same filters, and saves jobs to JobHunter |
 | 4 | Planned | Embedding score from a profile, title and skill scores, optional LLM review with a no-LLM fallback |
 | 5 | Planned | Applied / Not interested / Save links in the email; rejections lower similar jobs |
