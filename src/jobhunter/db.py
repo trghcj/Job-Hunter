@@ -34,6 +34,41 @@ class Base(DeclarativeBase):
     pass
 
 
+OWNER_PLACEHOLDER_ID = 1  # gets the pre-accounts data; claimed by the owner's first sign-in
+
+
+def _user_id(primary_key: bool = False, unique: bool = False) -> Mapped[int]:
+    return mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"),
+                         primary_key=primary_key, unique=unique)
+
+
+class User(Base):
+    """A Google (Firebase) account. firebase_uid is NULL only for the unclaimed owner."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    firebase_uid: Mapped[str | None] = mapped_column(Text, unique=True)
+    email: Mapped[str | None] = mapped_column(Text)
+    name: Mapped[str | None] = mapped_column(Text)
+    is_owner: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    blocked: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class UserSetting(Base):
+    """Per-user key/value settings (digest size, digest address, max job age)."""
+
+    __tablename__ = "user_settings"
+
+    user_id: Mapped[int] = _user_id(primary_key=True)
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    value: Mapped[object] = mapped_column(JSONB)
+
+
 class Job(Base):
     __tablename__ = "jobs"
 
@@ -57,13 +92,27 @@ class Job(Base):
     last_seen_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    # True while the job is known only from someone's Gmail alerts (see job_owners).
+    private: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
 
     __table_args__ = (Index("jobs_first_seen", first_seen_at.desc()),)
+
+
+class JobOwner(Base):
+    """Who may see a private job (one found in their own Gmail alerts)."""
+
+    __tablename__ = "job_owners"
+
+    job_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[int] = _user_id(primary_key=True)
 
 
 class JobScore(Base):
     __tablename__ = "job_scores"
 
+    user_id: Mapped[int] = _user_id(primary_key=True)
     job_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True
     )
@@ -86,6 +135,7 @@ class JobScore(Base):
 class JobStatus(Base):
     __tablename__ = "job_status"
 
+    user_id: Mapped[int] = _user_id(primary_key=True)
     job_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True
     )
@@ -136,6 +186,7 @@ class SearchProfile(Base):
     __tablename__ = "search_profiles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = _user_id()
     name: Mapped[str] = mapped_column(Text)
     titles: Mapped[list[str]] = mapped_column(ARRAY(Text))
     cities: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")
@@ -154,6 +205,7 @@ class MailAccount(Base):
     __tablename__ = "mail_accounts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = _user_id(unique=True)
     gmail_address: Mapped[str] = mapped_column(Text)
     app_password_enc: Mapped[bytes] = mapped_column(LargeBinary)
     senders: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")

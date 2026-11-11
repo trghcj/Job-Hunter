@@ -50,7 +50,7 @@ class FakeAdapter:
 def add_profile(session, titles=("Backend Engineer",), **kw) -> SearchProfile:
     profile = SearchProfile(
         name="default", titles=list(titles), cities=[], work_modes=["onsite", "hybrid", "remote"],
-        min_years=0, max_years=1, exclude_words=["unpaid"], active=True, **kw,
+        min_years=0, max_years=1, exclude_words=["unpaid"], active=True, user_id=1, **kw,
     )
     session.add(profile)
     session.commit()

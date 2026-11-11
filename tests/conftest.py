@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
-from jobhunter.db import Base
+from jobhunter.db import OWNER_PLACEHOLDER_ID, Base, User
 from jobhunter.settings import get_settings
 
 
@@ -23,6 +23,10 @@ def db_session():
     engine = create_engine(url, connect_args={"options": f"-csearch_path={schema}"})
     Base.metadata.create_all(engine)
     session = Session(engine)
+    session.add(User(id=OWNER_PLACEHOLDER_ID, is_owner=True))  # as migration 0005 creates
+    session.commit()
+    session.execute(text("SELECT setval(pg_get_serial_sequence('users', 'id'), 1)"))
+    session.commit()
     try:
         yield session
     finally:

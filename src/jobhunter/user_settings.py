@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from jobhunter.db import AppSetting, SearchProfile
+from jobhunter.db import OWNER_PLACEHOLDER_ID, AppSetting, SearchProfile
 from jobhunter.sources.base import Search
 
 log = logging.getLogger(__name__)
@@ -59,7 +59,8 @@ def seed_defaults(session: Session, path: Path = DEFAULT_CONFIG) -> None:
     profile, settings = load_defaults(path)
 
     if session.scalar(select(func.count()).select_from(SearchProfile)) == 0:
-        session.add(SearchProfile(name="default", active=True, **profile))
+        session.add(SearchProfile(name="default", active=True, user_id=OWNER_PLACEHOLDER_ID,
+                                  **profile))
         log.info("Seeded default search profile")
 
     for key, value in settings.items():

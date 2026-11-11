@@ -13,7 +13,7 @@ from sqlalchemy import literal_column, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from jobhunter.db import Job, JobScore, JobStatus, Run
+from jobhunter.db import OWNER_PLACEHOLDER_ID, Job, JobScore, JobStatus, Run
 from jobhunter.matching.filters import DEFAULT_MAX_AGE_DAYS, FilterResult, apply_filters
 from jobhunter.models import RawJob
 from jobhunter.normalize import NormalizedJob, normalize_job
@@ -175,7 +175,8 @@ def best_result(
 def _unsent_recent_jobs(session: Session, cutoff: datetime):
     return (
         select(Job)
-        .outerjoin(JobStatus, JobStatus.job_id == Job.id)
+        .outerjoin(JobStatus, (JobStatus.job_id == Job.id)
+                   & (JobStatus.user_id == OWNER_PLACEHOLDER_ID))
         .where(Job.first_seen_at >= cutoff, JobStatus.emailed_at.is_(None))
     )
 
@@ -189,6 +190,7 @@ def refilter_recent(
     for job in session.scalars(_unsent_recent_jobs(session, cutoff)):
         result = best_result(_row_to_normalized(job), searches, now, max_age_days)
         rows.append({
+            "user_id": OWNER_PLACEHOLDER_ID,
             "job_id": job.id,
             "passed_filters": result.passed,
             "filter_reason": result.reason,
@@ -200,7 +202,8 @@ def refilter_recent(
         ins = insert(JobScore).values(chunk)
         updates = ("passed_filters", "filter_reason", "title_score", "final_score", "scored_at")
         session.execute(ins.on_conflict_do_update(
-            index_elements=[JobScore.job_id], set_={k: ins.excluded[k] for k in updates}
+            index_elements=[JobScore.user_id, JobScore.job_id],
+            set_={k: ins.excluded[k] for k in updates},
         ))
     session.commit()
     return len(rows), sum(1 for r in rows if r["passed_filters"])
@@ -214,8 +217,9 @@ def select_digest(
     cutoff = now - timedelta(days=max_age_days)
     stmt = (
         select(Job, JobScore.final_score)
-        .join(JobScore, JobScore.job_id == Job.id)
-        .outerjoin(JobStatus, JobStatus.job_id == Job.id)
+        .join(JobScore, (JobScore.job_id == Job.id) & (JobScore.user_id == OWNER_PLACEHOLDER_ID))
+        .outerjoin(JobStatus, (JobStatus.job_id == Job.id)
+                   & (JobStatus.user_id == OWNER_PLACEHOLDER_ID))
         .where(
             JobScore.passed_filters.is_(True),
             JobStatus.emailed_at.is_(None),
@@ -239,10 +243,11 @@ def mark_emailed(session: Session, job_ids: Sequence[int], now: datetime) -> Non
     if not job_ids:
         return
     ins = insert(JobStatus).values(
-        [{"job_id": i, "emailed_at": now, "updated_at": now} for i in job_ids]
+        [{"user_id": OWNER_PLACEHOLDER_ID, "job_id": i, "emailed_at": now, "updated_at": now}
+         for i in job_ids]
     )
     session.execute(ins.on_conflict_do_update(
-        index_elements=[JobStatus.job_id],
+        index_elements=[JobStatus.user_id, JobStatus.job_id],
         set_={"emailed_at": ins.excluded.emailed_at, "updated_at": ins.excluded.updated_at},
     ))
     session.commit()
