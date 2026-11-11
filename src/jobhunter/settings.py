@@ -17,8 +17,13 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr = SecretStr("")
     settings_key: SecretStr = SecretStr("")
     alert_to: str = ""  # optional; failure alerts still reach you when the database is down
-    # Settings page (web): single-user login.
-    web_password: SecretStr = SecretStr("")
+    # Web app: Google sign-in through Firebase. These four values are public (they are sent
+    # to every browser); the server checks tokens with Google's public certificates.
+    firebase_api_key: str = ""
+    firebase_auth_domain: str = ""
+    firebase_project_id: str = ""
+    firebase_app_id: str = ""
+    owner_email: str = ""  # this Google account becomes the owner (admin page, old data)
     session_secret: SecretStr = SecretStr("")  # 32+ random characters
     web_https_only: bool = True  # secure cookies; set false only for local http testing
 

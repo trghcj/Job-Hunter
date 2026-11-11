@@ -145,7 +145,7 @@ def _secrets() -> list[str]:
     values = [
         s.adzuna_app_key.get_secret_value(), s.resend_api_key.get_secret_value(),
         s.gemini_api_key.get_secret_value(), s.settings_key.get_secret_value(),
-        s.web_password.get_secret_value(), s.session_secret.get_secret_value(),
+        s.session_secret.get_secret_value(),
     ]
     for url in (s.database_url, s.test_database_url):
         try:

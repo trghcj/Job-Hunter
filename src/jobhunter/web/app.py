@@ -1,40 +1,91 @@
-"""Settings page: single-user login, then one form for titles, experience, cities and digest.
+"""JobHunter web app: Google sign-in (Firebase), then each user's own pages.
 
 Start with:  uvicorn jobhunter.web.app:create_app --factory
-Needs WEB_PASSWORD and SESSION_SECRET (32+ random characters) in the environment.
+Needs SESSION_SECRET (32+ random characters) and the four FIREBASE_* values.
 """
 
 import hmac
+import logging
 import secrets
-import time
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Protocol
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from starlette.middleware.sessions import SessionMiddleware
 
+from jobhunter.accounts import Identity, SignIn
 from jobhunter.settings import Settings, get_settings
 from jobhunter.sources.catalog import SOURCE_LABELS
 from jobhunter.sources.watchlist import format_watchlist
+from jobhunter.web.firebase_auth import FirebaseVerifier, TokenError
 from jobhunter.web.forms import WORK_MODES, parse_form, parse_gmail_form
-from jobhunter.web.store import DbSettingsStore, SettingsStore
+from jobhunter.web.store import SettingsStore, UserStore
 
-TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-SESSION_DAYS = 7
+log = logging.getLogger(__name__)
+
+HERE = Path(__file__).parent
+TEMPLATES = Jinja2Templates(directory=str(HERE / "templates"))
+SESSION_DAYS = 30
 GMAIL_NOTICES = {
     "saved": "Gmail saved. Use Test connection to check it.",
     "removed": "Gmail account removed.",
 }
+BASE_CSP = ("default-src 'self'; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https://lh3.googleusercontent.com; "
+            "form-action 'self'; frame-ancestors 'none'")
 SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "same-origin",
-    "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; "
-    "form-action 'self'; frame-ancestors 'none'",
 }
+FIREBASE_FIELDS = ("firebase_api_key", "firebase_auth_domain", "firebase_project_id",
+                   "firebase_app_id")
+
+
+@dataclass(frozen=True)
+class UserInfo:
+    id: int
+    email: str | None
+    name: str | None
+    is_owner: bool
+    blocked: bool
+
+
+class AccountsGateway(Protocol):
+    def sign_in(self, identity: Identity) -> SignIn: ...
+    def get_user(self, user_id: int) -> UserInfo | None: ...
+
+
+class TokenVerifier(Protocol):
+    def verify(self, token: str) -> Identity: ...
+
+
+class DbAccounts:
+    """AccountsGateway backed by PostgreSQL (jobhunter.accounts)."""
+
+    def __init__(self, session_factory: sessionmaker[Session], owner_email: str) -> None:
+        self._sessions = session_factory
+        self._owner_email = owner_email
+
+    def sign_in(self, identity: Identity) -> SignIn:
+        from jobhunter import accounts
+
+        with self._sessions() as session:
+            return accounts.sign_in(session, identity, self._owner_email, datetime.now(UTC))
+
+    def get_user(self, user_id: int) -> UserInfo | None:
+        from jobhunter import accounts
+
+        with self._sessions() as session:
+            u = accounts.get_user(session, user_id)
+            return None if u is None else UserInfo(u.id, u.email, u.name, u.is_owner, u.blocked)
 
 
 def _csrf(request: Request) -> str:
@@ -44,38 +95,48 @@ def _csrf(request: Request) -> str:
     return token
 
 
-def _csrf_ok(request: Request, submitted: str | None) -> bool:
+def _csrf_ok(request: Request, submitted: object) -> bool:
     expected = request.session.get("csrf")
-    return bool(expected and submitted and hmac.compare_digest(expected, submitted))
-
-
-def _logged_in(request: Request) -> bool:
-    return request.session.get("auth") is True
+    return bool(expected and isinstance(submitted, str) and submitted
+                and hmac.compare_digest(expected, submitted))
 
 
 def _see_other(url: str) -> RedirectResponse:
     return RedirectResponse(url, status_code=303)
 
 
+def _login_csp(auth_domain: str) -> str:
+    frames = f"https://{auth_domain} https://accounts.google.com" if auth_domain else \
+        "https://accounts.google.com"
+    return (BASE_CSP + "; script-src 'self' https://www.gstatic.com https://apis.google.com"
+            "; connect-src 'self' https://identitytoolkit.googleapis.com "
+            "https://securetoken.googleapis.com https://www.googleapis.com"
+            f"; frame-src {frames}")
+
+
 def create_app(
-    store: SettingsStore | None = None,
+    store_factory: Callable[[int], SettingsStore] | None = None,
+    verifier: TokenVerifier | None = None,
+    accounts: AccountsGateway | None = None,
     settings: Settings | None = None,
-    login_delay: float = 1.0,
-    sleep: Callable[[float], None] = time.sleep,
 ) -> FastAPI:
     settings = settings or get_settings()
-    password = settings.web_password.get_secret_value()
     secret = settings.session_secret.get_secret_value()
-    if not password or len(secret) < 32:
-        raise RuntimeError("Set WEB_PASSWORD and SESSION_SECRET (32+ characters) to start.")
+    if len(secret) < 32:
+        raise RuntimeError("Set SESSION_SECRET (32+ random characters) to start.")
+    missing = [f.upper() for f in FIREBASE_FIELDS if not getattr(settings, f)]
 
-    if store is None:
+    if store_factory is None or accounts is None:
         from jobhunter.db import make_engine
 
-        store = DbSettingsStore(sessionmaker(make_engine()),
-                                settings_key=settings.settings_key.get_secret_value())
+        sessions = sessionmaker(make_engine())
+        key = settings.settings_key.get_secret_value()
+        store_factory = store_factory or (lambda uid: UserStore(sessions, uid, key))
+        accounts = accounts or DbAccounts(sessions, settings.owner_email)
+    if verifier is None and not missing:
+        verifier = FirebaseVerifier(settings.firebase_project_id)
 
-    app = FastAPI(title="JobHunter settings", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="JobHunter", docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(
         SessionMiddleware,
         secret_key=secret,
@@ -84,12 +145,35 @@ def create_app(
         max_age=SESSION_DAYS * 86400,
         session_cookie="jobhunter_session",
     )
+    app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
+    login_csp = _login_csp(settings.firebase_auth_domain)
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
         response: Response = await call_next(request)
         response.headers.update(SECURITY_HEADERS)
+        response.headers["Content-Security-Policy"] = (
+            login_csp if request.url.path == "/login" else BASE_CSP)
         return response
+
+    def current_user(request: Request) -> UserInfo | None:
+        uid = request.session.get("uid")
+        if not isinstance(uid, int):
+            return None
+        user = accounts.get_user(uid)
+        if user is None:
+            request.session.clear()
+        return user
+
+    def signed_in(request: Request) -> tuple[UserInfo | None, Response | None]:
+        """The signed-in user, or the redirect to send instead."""
+        user = current_user(request)
+        if user is None:
+            return None, _see_other("/login")
+        if user.blocked:
+            request.session.clear()
+            return None, _see_other("/blocked")
+        return user, None
 
     @app.get("/healthz")
     def healthz() -> dict[str, bool]:
@@ -97,23 +181,38 @@ def create_app(
 
     @app.get("/login", response_class=HTMLResponse)
     def login_page(request: Request):
-        if _logged_in(request):
+        user = current_user(request)
+        if user is not None and not user.blocked:
             return _see_other("/")
-        return TEMPLATES.TemplateResponse(request, "login.html", {"csrf": _csrf(request)})
+        if missing:
+            log.error("Sign-in is not set up; missing: %s", ", ".join(missing))
+        ctx = {"csrf": _csrf(request), "configured": not missing, "fb": settings}
+        return TEMPLATES.TemplateResponse(request, "login.html", ctx)
 
-    @app.post("/login")
-    async def login(request: Request):
-        form = await request.form()
-        if not _csrf_ok(request, form.get("csrf")):
-            return Response("Form expired, reload the page.", status_code=403)
-        given = str(form.get("password") or "")
-        if not hmac.compare_digest(given.encode(), password.encode()):
-            sleep(login_delay)  # slow down guessing
-            ctx = {"csrf": _csrf(request), "error": "Wrong password."}
-            return TEMPLATES.TemplateResponse(request, "login.html", ctx, status_code=401)
+    @app.post("/auth/session")
+    async def auth_session(request: Request):
+        try:
+            data = await request.json()
+        except ValueError:
+            return JSONResponse({"error": "Bad request."}, status_code=400)
+        if not isinstance(data, dict):
+            return JSONResponse({"error": "Bad request."}, status_code=400)
+        if not _csrf_ok(request, data.get("csrf")):
+            return JSONResponse({"error": "Page expired, reload it."}, status_code=403)
+        token = data.get("idToken")
+        if verifier is None or not isinstance(token, str):
+            return JSONResponse({"error": "Sign-in failed, please try again."}, status_code=401)
+        try:
+            identity = verifier.verify(token)
+        except TokenError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=401)
+        result = accounts.sign_in(identity)
         request.session.clear()
-        request.session["auth"] = True
-        return _see_other("/")
+        if result.outcome != "ok" or result.user_id is None:
+            return JSONResponse({"next": f"/{result.outcome}"})
+        request.session["uid"] = result.user_id
+        _csrf(request)
+        return JSONResponse({"next": "/"})
 
     @app.post("/logout")
     async def logout(request: Request):
@@ -122,11 +221,33 @@ def create_app(
             request.session.clear()
         return _see_other("/login")
 
-    def render_settings(request: Request, form, errors=(), saved=False, status=200,
-                        watchlist_text: str | None = None, gmail_errors=(),
-                        gmail_message: str | None = None):
+    def notice(request: Request, title: str, text: str):
+        ctx = {"title": title, "text": text}
+        return TEMPLATES.TemplateResponse(request, "notice.html", ctx)
+
+    @app.get("/blocked", response_class=HTMLResponse)
+    def blocked_page(request: Request):
+        return notice(request, "Your account is blocked",
+                      "The owner of this JobHunter has blocked your account.")
+
+    @app.get("/full", response_class=HTMLResponse)
+    def full_page(request: Request):
+        return notice(request, "JobHunter is full right now",
+                      "It has reached its user limit. Please try again later.")
+
+    @app.get("/")
+    def home(request: Request):
+        user, early = signed_in(request)
+        return early or _see_other("/settings")
+
+    # ---- settings (per user)
+
+    def render_settings(request: Request, user: UserInfo, store: SettingsStore, form,
+                        errors=(), saved=False, status=200, watchlist_text: str | None = None,
+                        gmail_errors=(), gmail_message: str | None = None):
         ctx = {
             "csrf": _csrf(request),
+            "user": user,
             "form": form,
             "errors": list(errors),
             "saved": saved,
@@ -142,28 +263,49 @@ def create_app(
         }
         return TEMPLATES.TemplateResponse(request, "settings.html", ctx, status_code=status)
 
-    @app.get("/", response_class=HTMLResponse)
+    @app.get("/settings", response_class=HTMLResponse)
     def settings_page(request: Request):
-        if not _logged_in(request):
-            return _see_other("/login")
+        user, early = signed_in(request)
+        if early:
+            return early
+        store = store_factory(user.id)
         saved = request.query_params.get("saved") == "1"
         message = GMAIL_NOTICES.get(request.query_params.get("gmail", ""))
-        return render_settings(request, store.load(), saved=saved, gmail_message=message)
+        return render_settings(request, user, store, store.load(), saved=saved,
+                               gmail_message=message)
 
     async def _checked_form(request: Request):
-        """The posted form if logged in with a valid CSRF token, else the response to send."""
-        if not _logged_in(request):
-            return None, _see_other("/login")
+        """(user, posted form) if signed in with a valid CSRF token, else the response."""
+        user, early = signed_in(request)
+        if early:
+            return None, None, early
         data = await request.form()
         if not _csrf_ok(request, data.get("csrf")):
-            return None, Response("Form expired, reload the page.", status_code=403)
-        return data, None
+            return None, None, Response("Form expired, reload the page.", status_code=403)
+        return user, data, None
+
+    @app.post("/settings")
+    async def save_settings(request: Request):
+        user, data, early = await _checked_form(request)
+        if early:
+            return early
+        store = store_factory(user.id)
+        fields = {k: str(v) for k, v in data.items() if isinstance(v, str)}
+        modes = [str(m) for m in data.getlist("work_modes")]
+        sources = [str(s) for s in data.getlist("sources")] if "sources_section" in data else None
+        form, errors = parse_form(fields, modes, sources)
+        if errors:
+            return render_settings(request, user, store, form, errors, status=400,
+                                   watchlist_text=fields.get("watchlist", ""))
+        store.save(form)
+        return _see_other("/settings?saved=1")
 
     @app.post("/gmail")
     async def save_gmail(request: Request):
-        data, early = await _checked_form(request)
+        user, data, early = await _checked_form(request)
         if early:
             return early
+        store = store_factory(user.id)
         fields = {k: str(v) for k, v in data.items() if isinstance(v, str)}
         address, app_password, senders, errors = parse_gmail_form(fields)
         if not errors:
@@ -172,39 +314,25 @@ def create_app(
             except ValueError as exc:
                 errors = [str(exc)]
         if errors:
-            return render_settings(request, store.load(), gmail_errors=errors, status=400)
-        return _see_other("/?gmail=saved#gmail")
+            return render_settings(request, user, store, store.load(), gmail_errors=errors,
+                                   status=400)
+        return _see_other("/settings?gmail=saved#gmail")
 
     @app.post("/gmail/test")
     async def test_gmail(request: Request):
-        data, early = await _checked_form(request)
+        user, _, early = await _checked_form(request)
         if early:
             return early
-        return render_settings(request, store.load(), gmail_message=store.test_mail())
+        store = store_factory(user.id)
+        return render_settings(request, user, store, store.load(),
+                               gmail_message=store.test_mail())
 
     @app.post("/gmail/delete")
     async def delete_gmail(request: Request):
-        data, early = await _checked_form(request)
+        user, _, early = await _checked_form(request)
         if early:
             return early
-        store.delete_mail()
-        return _see_other("/?gmail=removed#gmail")
-
-    @app.post("/")
-    async def save_settings(request: Request):
-        if not _logged_in(request):
-            return _see_other("/login")
-        data = await request.form()
-        if not _csrf_ok(request, data.get("csrf")):
-            return Response("Form expired, reload the page.", status_code=403)
-        fields = {k: str(v) for k, v in data.items() if isinstance(v, str)}
-        modes = [str(m) for m in data.getlist("work_modes")]
-        sources = [str(s) for s in data.getlist("sources")] if "sources_section" in data else None
-        form, errors = parse_form(fields, modes, sources)
-        if errors:
-            return render_settings(request, form, errors, status=400,
-                                   watchlist_text=fields.get("watchlist", ""))
-        store.save(form)
-        return _see_other("/?saved=1")
+        store_factory(user.id).delete_mail()
+        return _see_other("/settings?gmail=removed#gmail")
 
     return app

@@ -3,12 +3,16 @@
 {% block body %}
 <header><h1>JobHunter</h1></header>
 <div class="card" style="max-width:380px">
-  {% if error %}<div class="msg bad">{{ error }}</div>{% endif %}
-  <form method="post" action="/login">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label for="password">Password</label>
-    <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
-    <p><button type="submit">Sign in</button></p>
-  </form>
+  <p>Fresh tech jobs in India that match your filters, every morning.</p>
+  {% if configured %}
+  <p><button id="signin" type="button"
+      data-api-key="{{ fb.firebase_api_key }}" data-auth-domain="{{ fb.firebase_auth_domain }}"
+      data-project-id="{{ fb.firebase_project_id }}" data-app-id="{{ fb.firebase_app_id }}"
+      data-csrf="{{ csrf }}">Continue with Google</button></p>
+  <p id="signin-status" class="hint" role="status" aria-live="polite"></p>
+  <script type="module" src="/static/login.js"></script>
+  {% else %}
+  <div class="msg bad">Sign-in is not set up yet. The owner needs to add the Firebase settings.</div>
+  {% endif %}
 </div>
 {% endblock %}
