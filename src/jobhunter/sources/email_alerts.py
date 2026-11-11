@@ -118,14 +118,62 @@ def parse_linkedin(html: str, sent: datetime | None) -> list[RawJob]:
 
 # ---------------------------------------------------------------- Naukri
 
-_NAUKRI_JOB = re.compile(r"(https?://(?:www\.)?naukri\.com/job-listings-[^?#\s\"']*?-(\d{6,}))")
+# Real alerts link to /jd/job-listings-<title>-<company>-<city>-<a>-to-<b>-years-<id>.
+# The card text has no city or experience, so both are read from that link.
+_NAUKRI_JOB = re.compile(
+    r"(https?://(?:www\.)?naukri\.com/(?:jd/)?job-listings-([^?#\s\"']*?)-(\d{6,}))"
+)
+_SLUG_YEARS = re.compile(r"-(\d+)-to-(\d+)-years?$")
+_LEGAL = {"pvt", "private", "ltd", "limited", "llp", "inc", "opc", "co"}
 _EXPERIENCE = re.compile(r"^\d+\s*-\s*\d+\s*yrs?\.?$", re.I)
 _SALARY = re.compile(r"lacs|lakh|lpa|₹|not disclosed|p\.a\.", re.I)
+_JOB_TYPE = re.compile(r"^(internship|full[ -]time|part[ -]time|contract(ual)?|walk-?in)$", re.I)
+_DURATION = re.compile(r"\bduration$", re.I)
 
 
 def _is_place(text: str) -> bool:
     low = text.lower()
     return bool(detect_city(text)) or any(w in low for w in ("india", "remote", "ncr", "hybrid"))
+
+
+def _slugify(text: str) -> str:
+    return "-".join(re.findall(r"[a-z0-9]+", text.lower()))
+
+
+def _from_slug(slug: str, company: str | None) -> tuple[str | None, str | None]:
+    """(location, experience) from the link slug; location needs the company to anchor."""
+    experience = location = None
+    years = _SLUG_YEARS.search(slug)
+    if years:
+        experience = f"{years.group(1)}-{years.group(2)} Yrs"
+        slug = slug[: years.start()]
+    company_slug = _slugify(company or "")
+    at = slug.rfind(company_slug) if company_slug else -1
+    if at >= 0:
+        words = slug[at + len(company_slug):].strip("-").split("-")
+        while words and words[0] in _LEGAL:
+            words.pop(0)
+        location = " ".join(w.capitalize() for w in words if w) or None
+    return location, experience
+
+
+def _naukri_lines(lines: list[str]) -> dict[str, str | None]:
+    found: dict[str, str | None] = dict.fromkeys(
+        ("company", "location", "experience", "salary", "job_type"))
+    for line in lines:
+        if _EXPERIENCE.match(line):
+            found["experience"] = line
+        elif _SALARY.search(line):
+            found["salary"] = None if "not disclosed" in line.lower() else line
+        elif _JOB_TYPE.match(line):
+            found["job_type"] = line
+        elif _DURATION.search(line):
+            continue
+        elif found["company"] is None and not _is_place(line):
+            found["company"] = line
+        elif found["location"] is None and _is_place(line):
+            found["location"] = line
+    return found
 
 
 def parse_naukri(html: str, sent: datetime | None) -> list[RawJob]:
@@ -134,29 +182,23 @@ def parse_naukri(html: str, sent: datetime | None) -> list[RawJob]:
     seen: set[str] = set()
     for i, (text, href) in enumerate(tokens):
         m = _NAUKRI_JOB.search(href or "")
-        if not m or m.group(2) in seen or not _title_like(text):
+        if not m or m.group(3) in seen or not _title_like(text):
             continue
-        seen.add(m.group(2))
-        company = location = experience = salary = None
-        for line in _lines_after(tokens, i, _NAUKRI_JOB):
-            if _EXPERIENCE.match(line):
-                experience = line
-            elif _SALARY.search(line):
-                salary = None if "not disclosed" in line.lower() else line
-            elif company is None and not _is_place(line):
-                company = line
-            elif location is None:
-                location = line
+        seen.add(m.group(3))
+        found = _naukri_lines(_lines_after(tokens, i, _NAUKRI_JOB))
+        slug_location, slug_years = _from_slug(m.group(2), found["company"])
+        experience = found["experience"] or slug_years
+        notes = [f"Experience: {experience}" if experience else None, found["job_type"]]
         jobs.append(RawJob(
             source="naukri_email",
-            source_job_id=m.group(2),
+            source_job_id=m.group(3),
             url=m.group(1),
             title=text,
-            company=company or "Unknown",
-            location_text=location,
-            description=f"Experience: {experience}" if experience else None,
+            company=found["company"] or "Unknown",
+            location_text=found["location"] or slug_location,
+            description=". ".join(n for n in notes if n) or None,
             posted_at=sent,
-            salary_text=salary,
+            salary_text=found["salary"],
         ))
     return jobs
 

@@ -90,7 +90,8 @@ class GmailAlertsAdapter:
         try:
             uids = self._search(imap)
             for uid in uids:
-                _, data = imap.uid("FETCH", uid, "(RFC822)")
+                # BODY.PEEK: reading must not mark the email as read in your inbox.
+                _, data = imap.uid("FETCH", uid, "(BODY.PEEK[])")
                 raw = next((part[1] for part in data if isinstance(part, tuple)), b"")
                 msg = email.message_from_bytes(raw, policy=policy.default)
                 if isinstance(msg, EmailMessage):

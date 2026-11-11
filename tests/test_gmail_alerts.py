@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from email.message import EmailMessage
+from pathlib import Path
 
 import pytest
 from cryptography.fernet import Fernet
@@ -88,6 +89,27 @@ def test_parse_naukri_alert_keeps_experience_for_the_filter():
     assert jobs[1].salary_text is None
 
 
+def test_parse_real_naukri_layout():
+    html = (Path(__file__).parent / "fixtures" / "naukri_alert.html").read_text(encoding="utf-8")
+    jobs = parse_naukri(html, SENT)
+    assert [(j.title, j.company, j.location_text) for j in jobs] == [
+        ("Flutter Developer Intern", "Saar It Resources", "Mumbai"),
+        ("AI,SLM, LLM,RAG, Full Stack & Mobile Developer and", "Myblocks", "Ernakulam"),
+        ("Backend Engineer", "Landmark Techedge", "Delhi Ncr Gurugram"),
+    ]
+    assert jobs[0].url == ("https://www.naukri.com/jd/job-listings-flutter-developer-intern-"
+                           "saar-it-resources-pvt-ltd-mumbai-0-to-1-years-031126500597")
+    assert jobs[0].source_job_id == "031126500597"
+    assert jobs[0].description == "Experience: 0-1 Yrs. Internship"
+    assert jobs[2].description == "Experience: 2-4 Yrs"
+    assert jobs[2].salary_text == "6-12 Lacs P.A."
+
+
+def test_naukri_marketing_email_has_no_jobs():
+    html = '<p>Last few days to enroll for Quiz</p><a href="https://www.naukri.com/campus">Go</a>'
+    assert parse_naukri(html, SENT) == []
+
+
 def test_parse_alert_email_routes_by_sender():
     li = parse_alert_email(message("LinkedIn Job Alerts <jobalerts-noreply@linkedin.com>",
                                    LINKEDIN_HTML))
@@ -111,6 +133,7 @@ class FakeIMAP:
         self.searched: list[str] = []
         self.labelled: list[tuple[bytes, str]] = []
         self.logged_out = False
+        self.fetched: list[str] = []
 
     def login(self, user, password):
         if self.fail_login:
@@ -126,7 +149,8 @@ class FakeIMAP:
             self.searched.append(args[-1])
             return "OK", [b" ".join(self.messages)]
         if command == "FETCH":
-            return "OK", [(b"1 (RFC822 {1}", self.messages[args[0]].as_bytes()), b")"]
+            self.fetched.append(args[1])
+            return "OK", [(b"1 (BODY[] {1}", self.messages[args[0]].as_bytes()), b")"]
         if command == "STORE":
             self.labelled.append((args[0], args[2]))
             return "OK", [b""]
@@ -158,6 +182,7 @@ def test_adapter_reads_alerts_and_labels_them_once():
     assert len(jobs) == 4
     assert {j.source for j in jobs} == {"linkedin_email", "naukri_email"}
     assert imap.labelled == [(b"11,12", "JobHunter")]
+    assert imap.fetched == ["(BODY.PEEK[])"] * 2  # leaves the emails unread in your inbox
     assert imap.logged_out
     # a second profile in the same run does not read the mailbox again
     assert len(list(a.fetch(Search(titles=["y"])))) == 4
@@ -181,3 +206,8 @@ def test_count_waiting():
     imap = FakeIMAP({b"1": message("jobalert@naukri.com", NAUKRI_HTML)})
     assert adapter(imap).count_waiting() == 1
     assert imap.labelled == []
+
+
+def test_ernakulam_counts_as_kochi():
+    from jobhunter.normalize import detect_city
+    assert detect_city("Ernakulam") == "Kochi"

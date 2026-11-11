@@ -28,7 +28,7 @@ CITY_ALIASES: dict[str, list[str]] = {
     "Kolkata": ["kolkata", "calcutta"],
     "Ahmedabad": ["ahmedabad"],
     "Jaipur": ["jaipur"],
-    "Kochi": ["kochi", "cochin"],
+    "Kochi": ["kochi", "cochin", "ernakulam"],
     "Thiruvananthapuram": ["thiruvananthapuram", "trivandrum"],
     "Chandigarh": ["chandigarh"],
     "Mohali": ["mohali"],
