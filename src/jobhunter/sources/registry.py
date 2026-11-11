@@ -1,6 +1,7 @@
-"""Builds the enabled source adapters from app_settings['sources'], the company watchlist
-and env secrets. A source missing from the settings uses its default (on, except where
-it needs something you have not set up yet)."""
+"""Builds the shared source adapters from app_settings['sources'], the company watchlist
+and env secrets. Gmail job alerts are per user (mail_account.gmail_adapters). A source
+missing from the settings uses its default (on, except where it needs something you have
+not set up yet)."""
 
 import logging
 from collections.abc import Iterator
@@ -43,18 +44,6 @@ class BrokenSource:
         yield  # pragma: no cover  (makes this a generator)
 
 
-def _gmail(session: Session, settings: Settings) -> SourceAdapter | None:
-    from jobhunter.crypto import CryptoError
-    from jobhunter.db import OWNER_PLACEHOLDER_ID
-    from jobhunter.mail_account import gmail_adapter
-
-    try:
-        return gmail_adapter(session, OWNER_PLACEHOLDER_ID,
-                             settings.settings_key.get_secret_value())
-    except CryptoError as exc:
-        return BrokenSource("gmail_alerts", str(exc))
-
-
 def build_adapters(
     session: Session | None,
     settings: Settings,
@@ -83,10 +72,6 @@ def build_adapters(
         adapters.append(RemoteOKAdapter())
     if is_enabled(sources, "amazon"):
         adapters.append(AmazonAdapter())
-    if is_enabled(sources, "gmail_alerts") and session is not None:
-        gmail = _gmail(session, settings)
-        if gmail is not None:
-            adapters.append(gmail)
 
     if not adapters:
         log.warning("No job sources are enabled")

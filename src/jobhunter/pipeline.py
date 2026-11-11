@@ -9,16 +9,16 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
 
-from sqlalchemy import literal_column, select
+from sqlalchemy import ColumnElement, Select, and_, literal_column, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from jobhunter.db import OWNER_PLACEHOLDER_ID, Job, JobScore, JobStatus, Run
+from jobhunter.db import Job, JobOwner, JobScore, JobStatus, Run
 from jobhunter.matching.filters import DEFAULT_MAX_AGE_DAYS, FilterResult, apply_filters
 from jobhunter.models import RawJob
 from jobhunter.normalize import NormalizedJob, normalize_job
 from jobhunter.sources.base import Search, SourceAdapter
-from jobhunter.user_settings import load_active_searches
+from jobhunter.user_settings import active_user_searches, get_user_setting
 
 log = logging.getLogger(__name__)
 
@@ -52,11 +52,16 @@ class DigestJob:
 
 
 @dataclass
-class RunSummary:
-    sources: list[SourceResult] = field(default_factory=list)
+class UserResult:
     scored: int = 0
     passed: int = 0
     digest: list[DigestJob] = field(default_factory=list)
+
+
+@dataclass
+class RunSummary:
+    sources: list[SourceResult] = field(default_factory=list)
+    users: dict[int, UserResult] = field(default_factory=dict)
 
 
 def _batches(items: list, size: int = BATCH):
@@ -66,44 +71,60 @@ def _batches(items: list, size: int = BATCH):
 
 # ------------------------------------------------------------------ ingest
 
-def upsert_jobs(session: Session, jobs: Sequence[NormalizedJob], now: datetime) -> int:
-    """Insert new jobs, bump last_seen_at on known ones. Returns how many were new."""
-    rows = [
-        {
-            "dedupe_key": j.dedupe_key,
-            "source": j.raw.source,
-            "source_job_id": j.raw.source_job_id,
-            "url": j.raw.url,
-            "title": j.raw.title,
-            "company": j.raw.company,
-            "location_text": j.raw.location_text,
-            "city": j.city,
-            "country": j.country,
-            "work_mode": j.work_mode,
-            "description": j.raw.description,
-            "salary_text": j.raw.salary_text,
-            "posted_at": j.raw.posted_at,
-            "first_seen_at": now,
-            "last_seen_at": now,
-        }
-        for j in jobs
-    ]
+def _job_row(j: NormalizedJob, now: datetime, private: bool) -> dict:
+    return {
+        "dedupe_key": j.dedupe_key,
+        "source": j.raw.source,
+        "source_job_id": j.raw.source_job_id,
+        "url": j.raw.url,
+        "title": j.raw.title,
+        "company": j.raw.company,
+        "location_text": j.raw.location_text,
+        "city": j.city,
+        "country": j.country,
+        "work_mode": j.work_mode,
+        "description": j.raw.description,
+        "salary_text": j.raw.salary_text,
+        "posted_at": j.raw.posted_at,
+        "first_seen_at": now,
+        "last_seen_at": now,
+        "private": private,
+    }
+
+
+def upsert_jobs(session: Session, jobs: Sequence[NormalizedJob], now: datetime,
+                private_to: int | None = None) -> int:
+    """Insert new jobs, bump last_seen_at on known ones. Returns how many were new.
+
+    Public sources make a job public. A job from someone's Gmail (private_to) is visible
+    only to them (job_owners) until a public source also finds it; it never turns a public
+    job private."""
+    rows = [_job_row(j, now, private_to is not None) for j in jobs]
     inserted = 0
     for chunk in _batches(rows):
         ins = insert(Job).values(chunk)
-        stmt = ins.on_conflict_do_update(
-            index_elements=[Job.dedupe_key], set_={"last_seen_at": ins.excluded.last_seen_at}
-        ).returning(literal_column("(xmax = 0)"))  # true when the row was inserted
-        inserted += sum(1 for was_new in session.scalars(stmt) if was_new)
+        updates = {"last_seen_at": ins.excluded.last_seen_at}
+        if private_to is None:
+            updates["private"] = False
+        stmt = ins.on_conflict_do_update(index_elements=[Job.dedupe_key], set_=updates)
+        stmt = stmt.returning(Job.id, literal_column("(xmax = 0)"))  # true when inserted
+        result = session.execute(stmt).all()
+        inserted += sum(1 for _, was_new in result if was_new)
+        if private_to is not None and result:
+            owners = insert(JobOwner).values(
+                [{"job_id": job_id, "user_id": private_to} for job_id, _ in result])
+            session.execute(owners.on_conflict_do_nothing())
     session.commit()
     return inserted
 
 
 def ingest_source(
-    session: Session, adapter: SourceAdapter, searches: list[Search], now: datetime
+    session: Session, adapter: SourceAdapter, searches: list[Search], now: datetime,
+    private_to: int | None = None,
 ) -> SourceResult:
-    result = SourceResult(source=adapter.name)
-    run = Run(source=adapter.name, started_at=now)
+    name = adapter.name if private_to is None else f"{adapter.name}:{private_to}"
+    result = SourceResult(source=name)
+    run = Run(source=name, started_at=now)
     session.add(run)
     session.commit()
 
@@ -116,22 +137,48 @@ def ingest_source(
                 jobs.setdefault(job.dedupe_key, job)
     except Exception as exc:  # one broken source must not stop the run
         result.ok, result.error = False, f"{type(exc).__name__}: {exc}"[:500]
-        log.error("Source %s failed: %s", adapter.name, result.error)
+        log.error("Source %s failed: %s", name, result.error)
 
     try:
-        result.inserted = upsert_jobs(session, list(jobs.values()), now)
+        result.inserted = upsert_jobs(session, list(jobs.values()), now, private_to)
     except Exception as exc:
         session.rollback()
         result.ok = False
         result.error = result.error or f"saving jobs failed: {type(exc).__name__}"
-        log.error("Saving jobs from %s failed: %s", adapter.name, type(exc).__name__)
+        log.error("Saving jobs from %s failed: %s", name, type(exc).__name__)
 
     run.finished_at = datetime.now(UTC)
     run.ok, run.error = result.ok, result.error
     run.fetched, run.inserted = result.fetched, result.inserted
     session.commit()
-    log.info("%s: fetched %d, new %d", adapter.name, result.fetched, result.inserted)
+    log.info("%s: fetched %d, new %d", name, result.fetched, result.inserted)
     return result
+
+
+def combined_search(per_user: dict[int, list[Search]]) -> Search | None:
+    """One search for the shared fetch: every user's titles (most common first), the widest
+    experience range, all cities and work modes. Each user's own filters run afterwards."""
+    counts: dict[str, int] = {}
+    spelling: dict[str, str] = {}
+    lows: list[int] = []
+    highs: list[int] = []
+    for searches in per_user.values():
+        mine: set[str] = set()
+        for search in searches:
+            lows.append(search.min_years)
+            highs.append(search.max_years)
+            for title in search.titles:
+                key = " ".join(title.lower().split())
+                spelling.setdefault(key, " ".join(title.split()))
+                mine.add(key)
+        for key in mine:
+            counts[key] = counts.get(key, 0) + 1
+    if not counts:
+        return None
+    ordered = sorted(counts, key=lambda k: (-counts[k], k))
+    return Search(titles=[spelling[k] for k in ordered], cities=[],
+                  work_modes=["onsite", "hybrid", "remote"], min_years=min(lows),
+                  max_years=max(highs), exclude_words=[])
 
 
 # ------------------------------------------------------------------ filter + score
@@ -172,25 +219,40 @@ def best_result(
     return max(results, key=lambda r: r.title_score)
 
 
-def _unsent_recent_jobs(session: Session, cutoff: datetime):
-    return (
-        select(Job)
-        .outerjoin(JobStatus, (JobStatus.job_id == Job.id)
-                   & (JobStatus.user_id == OWNER_PLACEHOLDER_ID))
-        .where(Job.first_seen_at >= cutoff, JobStatus.emailed_at.is_(None))
-    )
+def visible_to(user_id: int) -> ColumnElement[bool]:
+    """SQL condition: the job is public, or private to this user."""
+    mine = select(JobOwner.job_id).where(JobOwner.job_id == Job.id,
+                                         JobOwner.user_id == user_id).exists()
+    return or_(Job.private.is_(False), mine)
 
 
-def refilter_recent(
-    session: Session, searches: list[Search], now: datetime, max_age_days: int
+def status_join(user_id: int) -> ColumnElement[bool]:
+    return and_(JobStatus.job_id == Job.id, JobStatus.user_id == user_id)
+
+
+def _open_for() -> ColumnElement[bool]:
+    """Not yet emailed to the joined user and not hidden by them."""
+    return and_(JobStatus.emailed_at.is_(None),
+                or_(JobStatus.status.is_(None), JobStatus.status != "hidden"))
+
+
+def visible_jobs(user_id: int) -> Select:
+    """Jobs this user may see, with their own status row (if any) outer-joined."""
+    return select(Job).outerjoin(JobStatus, status_join(user_id)).where(visible_to(user_id))
+
+
+def refilter_for_user(
+    session: Session, user_id: int, searches: list[Search], now: datetime, max_age_days: int
 ) -> tuple[int, int]:
-    """Re-run filters on every recent, unsent job, so settings changes apply at once."""
+    """Re-run this user's filters on every recent job they can see and were not sent,
+    so settings changes apply at once."""
     cutoff = now - timedelta(days=max_age_days)
+    stmt = visible_jobs(user_id).where(Job.first_seen_at >= cutoff, _open_for())
     rows = []
-    for job in session.scalars(_unsent_recent_jobs(session, cutoff)):
+    for job in session.scalars(stmt):
         result = best_result(_row_to_normalized(job), searches, now, max_age_days)
         rows.append({
-            "user_id": OWNER_PLACEHOLDER_ID,
+            "user_id": user_id,
             "job_id": job.id,
             "passed_filters": result.passed,
             "filter_reason": result.reason,
@@ -212,17 +274,17 @@ def refilter_recent(
 # ------------------------------------------------------------------ digest
 
 def select_digest(
-    session: Session, now: datetime, max_age_days: int, max_jobs: int
+    session: Session, user_id: int, now: datetime, max_age_days: int, max_jobs: int
 ) -> list[DigestJob]:
     cutoff = now - timedelta(days=max_age_days)
     stmt = (
         select(Job, JobScore.final_score)
-        .join(JobScore, (JobScore.job_id == Job.id) & (JobScore.user_id == OWNER_PLACEHOLDER_ID))
-        .outerjoin(JobStatus, (JobStatus.job_id == Job.id)
-                   & (JobStatus.user_id == OWNER_PLACEHOLDER_ID))
+        .join(JobScore, and_(JobScore.job_id == Job.id, JobScore.user_id == user_id))
+        .outerjoin(JobStatus, status_join(user_id))
         .where(
             JobScore.passed_filters.is_(True),
-            JobStatus.emailed_at.is_(None),
+            _open_for(),
+            visible_to(user_id),
             Job.first_seen_at >= cutoff,
         )
         .order_by(JobScore.final_score.desc(), Job.posted_at.desc().nulls_last(), Job.id)
@@ -239,11 +301,11 @@ def select_digest(
     ]
 
 
-def mark_emailed(session: Session, job_ids: Sequence[int], now: datetime) -> None:
+def mark_emailed(session: Session, user_id: int, job_ids: Sequence[int], now: datetime) -> None:
     if not job_ids:
         return
     ins = insert(JobStatus).values(
-        [{"user_id": OWNER_PLACEHOLDER_ID, "job_id": i, "emailed_at": now, "updated_at": now}
+        [{"user_id": user_id, "job_id": i, "emailed_at": now, "updated_at": now}
          for i in job_ids]
     )
     session.execute(ins.on_conflict_do_update(
@@ -279,23 +341,38 @@ def ran_successfully_today(session: Session, now: datetime) -> bool:
 
 # ------------------------------------------------------------------ whole run
 
+def _user_limits(session: Session, user_id: int) -> tuple[int, int]:
+    digest = get_user_setting(session, user_id, "digest", {}) or {}
+    max_age = get_user_setting(session, user_id, "max_age_days", DEFAULT_MAX_AGE_DAYS)
+    return int(max_age), int(digest.get("max_jobs", DEFAULT_MAX_JOBS))
+
+
 def run_pipeline(
     session: Session,
-    adapters: Sequence[SourceAdapter],
+    shared_adapters: Sequence[SourceAdapter],
+    gmail: Sequence[tuple[int, SourceAdapter]] = (),
     now: datetime | None = None,
-    max_age_days: int = DEFAULT_MAX_AGE_DAYS,
-    max_jobs: int = DEFAULT_MAX_JOBS,
 ) -> RunSummary:
+    """Fetch once for everyone, read each user's Gmail, then filter and pick a digest per
+    user. Users without job titles (or blocked) are skipped."""
     now = now or datetime.now(UTC)
     summary = RunSummary()
-    searches = [s for s in load_active_searches(session, OWNER_PLACEHOLDER_ID) if s.titles]
-    if not searches:
-        log.warning("No active search profile has titles; nothing to search for")
+    per_user = active_user_searches(session)
+    combined = combined_search(per_user)
+    if combined is None:
+        log.warning("No user has job titles; nothing to search for")
         return summary
 
-    for adapter in adapters:
-        summary.sources.append(ingest_source(session, adapter, searches, now))
+    for adapter in shared_adapters:
+        summary.sources.append(ingest_source(session, adapter, [combined], now))
+    for user_id, adapter in gmail:
+        if user_id in per_user:
+            summary.sources.append(
+                ingest_source(session, adapter, [combined], now, private_to=user_id))
 
-    summary.scored, summary.passed = refilter_recent(session, searches, now, max_age_days)
-    summary.digest = select_digest(session, now, max_age_days, max_jobs)
+    for user_id, searches in per_user.items():
+        max_age, max_jobs = _user_limits(session, user_id)
+        scored, passed = refilter_for_user(session, user_id, searches, now, max_age)
+        digest = select_digest(session, user_id, now, max_age, max_jobs)
+        summary.users[user_id] = UserResult(scored, passed, digest)
     return summary

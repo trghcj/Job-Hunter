@@ -43,12 +43,33 @@ def cmd_migrate(_: argparse.Namespace) -> int:
     return 0
 
 
-def _recipients(session: Session) -> list[str]:
-    from jobhunter.db import OWNER_PLACEHOLDER_ID
+def _owner_id(session: Session) -> int:
+    from sqlalchemy import select
+
+    from jobhunter.db import OWNER_PLACEHOLDER_ID, User
+
+    found = session.scalars(select(User.id).where(User.is_owner.is_(True)).order_by(User.id))
+    return found.first() or OWNER_PLACEHOLDER_ID
+
+
+def _recipients(session: Session, user_id: int | None = None) -> list[str]:
+    """A user's digest addresses (the owner's when no user is given)."""
     from jobhunter.user_settings import get_user_setting
 
-    to = get_user_setting(session, OWNER_PLACEHOLDER_ID, "digest_to", []) or []
+    uid = _owner_id(session) if user_id is None else user_id
+    to = get_user_setting(session, uid, "digest_to", []) or []
     return [to] if isinstance(to, str) else list(to)
+
+
+def _email_everyone(session: Session) -> bool:
+    """Digests go to all users only once digest_from is an address on your own domain;
+    Resend's shared test sender (@resend.dev) can only reach the account owner."""
+    from email.utils import parseaddr
+
+    from jobhunter.user_settings import get_setting
+
+    address = parseaddr(str(get_setting(session, "digest_from", "") or ""))[1].lower()
+    return bool(address) and not address.endswith("@resend.dev")
 
 
 def _email_sender(session: Session):
@@ -67,7 +88,7 @@ def _email_sender(session: Session):
     return ResendSender(key, from_addr)
 
 
-def _deliver(session: Session, digest, now):
+def _deliver(session: Session, user_id: int, digest, now, run_source: str = "email"):
     from jobhunter.db import Run
     from jobhunter.notify import email_resend
     from jobhunter.notify.email_resend import DeliveryResult, deliver_digest
@@ -81,15 +102,38 @@ def _deliver(session: Session, digest, now):
     else:
         budget = DbBudget(session, {email_resend.PROVIDER: email_resend.LIMITS})
         result = deliver_digest(
-            digest, sender, _recipients(session), budget, now,
-            mark=lambda ids: mark_emailed(session, ids, now),
+            digest, sender, _recipients(session, user_id), budget, now,
+            mark=lambda ids: mark_emailed(session, user_id, ids, now),
         )
     session.add(Run(
-        source="email", started_at=now, finished_at=datetime.now(UTC),
+        source=run_source, started_at=now, finished_at=datetime.now(UTC),
         ok=result.error is None, fetched=len(digest), inserted=result.count, error=result.error,
     ))
     session.commit()
     return result
+
+
+def deliver_digests(session: Session, summary, now: datetime) -> list[str]:
+    """Email each user's digest. The owner always; others only with your own sending
+    domain (see _email_everyone). Returns problems; one failure does not stop the rest."""
+    owner = _owner_id(session)
+    everyone = _email_everyone(session)
+    problems: list[str] = []
+    for user_id, result in summary.users.items():
+        is_owner = user_id == owner
+        if not (is_owner or everyone):
+            continue
+        if not is_owner and not _recipients(session, user_id):
+            continue  # this user set no digest address: My jobs only
+        source = "email" if is_owner else f"email:{user_id}"
+        delivery = _deliver(session, user_id, result.digest, now, source)
+        who = "your" if is_owner else f"user {user_id}'s"
+        if delivery.sent:
+            print(f"{who} digest emailed: {delivery.count} jobs")
+        elif delivery.error:
+            print(f"{who} digest NOT sent: {delivery.error}")
+            problems.append(f"{who} digest email: {delivery.error}")
+    return problems
 
 
 def _secrets() -> list[str]:
@@ -174,12 +218,13 @@ def _ran_today(session: Session, now: datetime) -> bool:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    from jobhunter.db import OWNER_PLACEHOLDER_ID
-    from jobhunter.pipeline import DEFAULT_MAX_JOBS, run_pipeline
+    from jobhunter.mail_account import gmail_adapters
+    from jobhunter.pipeline import run_pipeline
     from jobhunter.settings import get_settings
+    from jobhunter.sources.catalog import is_enabled
     from jobhunter.sources.registry import build_adapters
     from jobhunter.sources.watchlist import companies_from_setting
-    from jobhunter.user_settings import get_setting, get_user_setting
+    from jobhunter.user_settings import get_setting
 
     now = datetime.now(UTC)
     problems: list[str] = []
@@ -190,32 +235,25 @@ def cmd_run(args: argparse.Namespace) -> int:
             print("already ran successfully today (IST); skipping this backup run")
             session.close()
             return 0
+        settings = get_settings()
         sources = get_setting(session, "sources", {}) or {}
-        digest_cfg = get_user_setting(session, OWNER_PLACEHOLDER_ID, "digest", {}) or {}
-        max_age = int(get_user_setting(session, OWNER_PLACEHOLDER_ID, "max_age_days", 14))
         watchlist = companies_from_setting(get_setting(session, "company_watchlist", []))
-        adapters = build_adapters(session, get_settings(), sources, watchlist)
-        if not adapters:
+        adapters = build_adapters(session, settings, sources, watchlist)
+        gmail = (gmail_adapters(session, settings.settings_key.get_secret_value())
+                 if is_enabled(sources, "gmail_alerts") else [])
+        if not adapters and not gmail:
             problems.append("no job sources are enabled or configured")
-        summary = run_pipeline(
-            session, adapters, now=now, max_age_days=max_age,
-            max_jobs=int(digest_cfg.get("max_jobs", DEFAULT_MAX_JOBS)),
-        )
-        delivery = _deliver(session, summary.digest, now)
+        summary = run_pipeline(session, adapters, gmail, now=now)
 
         for s in summary.sources:
             status = "ok" if s.ok else f"FAILED ({s.error})"
             print(f"{s.source}: fetched {s.fetched}, new {s.inserted}, {status}")
             if not s.ok:
                 problems.append(f"{s.source}: {s.error}")
-        print(f"checked {summary.scored} recent unsent jobs, {summary.passed} passed the filters")
-        if delivery.sent:
-            print(f"digest emailed: {delivery.count} jobs")
-        elif delivery.error:
-            print(f"digest NOT sent: {delivery.error}")
-            problems.append(f"digest email: {delivery.error}")
-        else:
-            print("no new jobs, no email sent")
+        for user_id, result in summary.users.items():
+            print(f"user {user_id}: checked {result.scored} recent unsent jobs, "
+                  f"{result.passed} passed the filters")
+        problems += deliver_digests(session, summary, now)
 
         try:
             _maybe_heartbeat(session, now)

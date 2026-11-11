@@ -8,6 +8,7 @@ from jobhunter.matching.filters import FilterResult
 from jobhunter.models import RawJob
 from jobhunter.pipeline import mark_emailed, provisional_score, run_pipeline
 from jobhunter.sources.base import Search
+from jobhunter.user_settings import set_user_setting
 
 NOW = datetime.now(UTC)
 
@@ -83,8 +84,8 @@ def test_saves_filters_and_builds_digest(db_session):
     summary = run_pipeline(db_session, [FakeAdapter("fake", jobs)], now=NOW)
 
     assert count(db_session, Job) == 4
-    assert summary.passed == 2
-    assert [d.company for d in summary.digest] == ["Acme", "Delta"]
+    assert summary.users[1].passed == 2
+    assert [d.company for d in summary.users[1].digest] == ["Acme", "Delta"]
     reasons = dict(db_session.execute(
         select(Job.company, JobScore.filter_reason).join(JobScore, JobScore.job_id == Job.id)
     ).all())
@@ -102,7 +103,7 @@ def test_failing_source_does_not_stop_the_run(db_session):
     assert runs["broken"].ok is False and "source broke" in runs["broken"].error
     assert runs["broken"].inserted == 1  # the job fetched before the failure is kept
     assert runs["good"].ok is True and runs["good"].inserted == 1
-    assert {d.company for d in summary.digest} == {"X", "Z"}
+    assert {d.company for d in summary.users[1].digest} == {"X", "Z"}
 
 
 def test_same_job_from_two_sources_is_stored_once(db_session):
@@ -113,29 +114,29 @@ def test_same_job_from_two_sources_is_stored_once(db_session):
 
     assert count(db_session, Job) == 1
     assert [s.inserted for s in summary.sources] == [1, 0]
-    assert len(summary.digest) == 1
+    assert len(summary.users[1].digest) == 1
 
 
 def test_second_run_sends_nothing_new(db_session):
     add_profile(db_session)
     adapter = FakeAdapter("fake", [raw()])
     first = run_pipeline(db_session, [adapter], now=NOW)
-    assert len(first.digest) == 1
-    mark_emailed(db_session, [d.job_id for d in first.digest], now=NOW)
+    assert len(first.users[1].digest) == 1
+    mark_emailed(db_session, 1, [d.job_id for d in first.users[1].digest], now=NOW)
 
     second = run_pipeline(db_session, [adapter], now=NOW + timedelta(hours=1))
-    assert second.digest == []
+    assert second.users[1].digest == []
     assert second.sources[0].inserted == 0
 
 
 def test_changing_titles_changes_the_next_run(db_session):
     profile = add_profile(db_session, titles=["Backend Engineer"])
     run_pipeline(db_session, [FakeAdapter("fake", [raw(title="Python Developer")])], now=NOW)
-    assert run_pipeline(db_session, [], now=NOW).digest == []
+    assert run_pipeline(db_session, [], now=NOW).users[1].digest == []
 
     profile.titles = ["Python Developer"]
     db_session.commit()
-    digest = run_pipeline(db_session, [], now=NOW).digest
+    digest = run_pipeline(db_session, [], now=NOW).users[1].digest
     assert [d.title for d in digest] == ["Python Developer"]
 
 
@@ -144,7 +145,7 @@ def test_no_titles_means_no_fetch(db_session):
     adapter = FakeAdapter("fake", [raw()])
     summary = run_pipeline(db_session, [adapter], now=NOW)
     assert adapter.calls == 0
-    assert summary.digest == []
+    assert summary.users == {}
 
 
 def test_ran_successfully_today(db_session):
@@ -163,5 +164,6 @@ def test_ran_successfully_today(db_session):
 def test_digest_respects_max_jobs(db_session):
     add_profile(db_session)
     jobs = [raw(company=f"C{i}") for i in range(5)]
-    summary = run_pipeline(db_session, [FakeAdapter("fake", jobs)], now=NOW, max_jobs=3)
-    assert len(summary.digest) == 3
+    set_user_setting(db_session, 1, "digest", {"max_jobs": 3})
+    summary = run_pipeline(db_session, [FakeAdapter("fake", jobs)], now=NOW)
+    assert len(summary.users[1].digest) == 3
