@@ -24,6 +24,7 @@ from jobhunter.accounts import Identity, SignIn
 from jobhunter.settings import Settings, get_settings
 from jobhunter.sources.catalog import SOURCE_LABELS
 from jobhunter.sources.watchlist import format_watchlist
+from jobhunter.web.api import ApiGateway, DbApi, RateLimiter, api_router
 from jobhunter.web.firebase_auth import FirebaseVerifier, TokenError
 from jobhunter.web.forms import WORK_MODES, parse_admin_form, parse_form, parse_gmail_form
 from jobhunter.web.jobs_store import TABS, JobsStore, JobsView
@@ -129,6 +130,8 @@ def create_app(
     store_factory: Callable[[int], SettingsStore] | None = None,
     jobs_store: JobsView | None = None,
     admin_store: AdminView | None = None,
+    api: ApiGateway | None = None,
+    api_limiter: RateLimiter | None = None,
     verifier: TokenVerifier | None = None,
     accounts: AccountsGateway | None = None,
     settings: Settings | None = None,
@@ -139,7 +142,7 @@ def create_app(
         raise RuntimeError("Set SESSION_SECRET (32+ random characters) to start.")
     missing = [f.upper() for f in FIREBASE_FIELDS if not getattr(settings, f)]
 
-    if None in (store_factory, accounts, jobs_store, admin_store):
+    if None in (store_factory, accounts, jobs_store, admin_store, api):
         from jobhunter.db import make_engine
 
         sessions = sessionmaker(make_engine())
@@ -148,6 +151,7 @@ def create_app(
         accounts = accounts or DbAccounts(sessions, settings.owner_email)
         jobs_store = jobs_store or JobsStore(sessions)
         admin_store = admin_store or AdminStore(sessions)
+        api = api or DbApi(sessions)
     if verifier is None and not missing:
         verifier = FirebaseVerifier(settings.firebase_project_id)
 
@@ -161,6 +165,7 @@ def create_app(
         session_cookie="jobhunter_session",
     )
     app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
+    app.include_router(api_router(api, api_limiter or RateLimiter()))
     login_csp = _login_csp(settings.firebase_auth_domain)
 
     @app.middleware("http")
