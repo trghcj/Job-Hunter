@@ -16,6 +16,11 @@ Daily run: GitHub Actions. LLM via an LLMClient interface (Gemini default).
 - Never automate a logged-in LinkedIn or Naukri account, and never scrape their sites
   (no browser impersonation). Their jobs come only from alert emails read from the user's
   own Gmail over IMAP with an app password.
+- The Chrome extension (extension/) may read the one job page the user has open in their
+  own browser. It never clicks, scrolls, navigates, searches, polls faster than once a
+  second, or sends anything to LinkedIn, Naukri or Indeed. Only its service worker holds
+  the token and talks to the JobHunter API (/api/v1, bearer token, hashed in the database).
+- Extension tests: `npm test` in extension/ (Node 22, linkedom). No network in tests.
 - The Gmail app password is stored only encrypted (crypto.py, SETTINGS_KEY) and is never
   shown on a page, logged, or included in an error message.
 - Respect rate limits: Adzuna max 250 calls/day, Resend max 100 emails/day. Count calls in the database.
