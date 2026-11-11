@@ -22,6 +22,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from jobhunter.accounts import Access, Identity, SignIn, email_set
 from jobhunter.extension_tokens import label_from_user_agent
+from jobhunter.notify.email_resend import IST
 from jobhunter.settings import Settings, get_settings
 from jobhunter.sources.catalog import SOURCE_LABELS
 from jobhunter.sources.watchlist import format_watchlist
@@ -37,6 +38,18 @@ HERE = Path(__file__).parent
 TEMPLATES = Jinja2Templates(directory=str(HERE / "templates"))
 TEMPLATES.env.filters["safe_url"] = lambda url: (
     url if isinstance(url, str) and url.startswith(("https://", "http://")) else "")
+
+
+def ist(value: datetime | None, fmt: str, missing: str = "") -> str:
+    """A database time (UTC) as India time for display; `missing` when there is none."""
+    if value is None:
+        return missing
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(IST).strftime(fmt)
+
+
+TEMPLATES.env.filters["ist"] = ist
 SESSION_DAYS = 30
 GMAIL_NOTICES = {
     "saved": "Gmail saved. Use Test connection to check it.",

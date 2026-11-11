@@ -75,8 +75,8 @@
     {% for t in tokens %}
     <tr>
       <td>{{ t.label }}</td>
-      <td>{{ t.created_at.strftime("%d %b %Y") if t.created_at else "" }}</td>
-      <td>{{ t.last_used_at.strftime("%d %b %H:%M") if t.last_used_at else "never" }}</td>
+      <td>{{ t.created_at | ist("%d %b %Y") }}</td>
+      <td>{{ t.last_used_at | ist("%d %b %H:%M", "never") }}</td>
       <td><form method="post" action="/extension/tokens/{{ t.id }}/delete">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <button class="link" type="submit">Disconnect</button>
@@ -123,10 +123,10 @@
   <h2>Recent runs</h2>
   {% if runs %}
   <table>
-    <tr><th>When (UTC)</th><th>Step</th><th>Result</th><th>Fetched</th><th>New / sent</th></tr>
+    <tr><th>When (IST)</th><th>Step</th><th>Result</th><th>Fetched</th><th>New / sent</th></tr>
     {% for r in runs %}
     <tr>
-      <td>{{ r.started_at.strftime('%d %b %H:%M') if r.started_at else '' }}</td>
+      <td>{{ r.started_at | ist('%d %b %H:%M') }}</td>
       <td>{{ r.source }}</td>
       <td>{% if r.ok %}<span class="ok">ok</span>{% else %}<span class="bad" title="{{ r.error or '' }}">failed</span>{% endif %}</td>
       <td>{{ r.fetched if r.fetched is not none else '' }}</td>

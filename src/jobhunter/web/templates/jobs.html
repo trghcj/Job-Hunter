@@ -36,7 +36,7 @@
   </h2>
   <p class="meta">{{ c.company }}{% if c.location_text %} · {{ c.location_text }}{% endif %}
     {% if c.work_mode != "unknown" %} · {{ c.work_mode }}{% endif %}
-    · {{ c.source }}{% if c.posted_at %} · posted {{ c.posted_at.strftime("%d %b") }}{% endif %}
+    · {{ c.source }}{% if c.posted_at %} · posted {{ c.posted_at | ist("%d %b") }}{% endif %}
     {% if c.status in ("saved", "applied") %}<span class="badge">{{ c.status }}</span>{% endif %}</p>
   <div class="actions">
     {% for value, label in (("saved", "Save"), ("applied", "Applied"), ("hidden", "Hide")) %}

@@ -18,8 +18,8 @@
     {% for u in users %}
     <tr>
       <td>{{ u.email or "(not claimed yet)" }}{% if u.is_owner %} <span class="badge">owner</span>{% endif %}{% if u.blocked %} <span class="badge bad">blocked</span>{% endif %}</td>
-      <td>{{ u.created_at.strftime("%d %b %Y") if u.created_at else "" }}</td>
-      <td>{{ u.last_login_at.strftime("%d %b %H:%M") if u.last_login_at else "" }}</td>
+      <td>{{ u.created_at | ist("%d %b %Y") }}</td>
+      <td>{{ u.last_login_at | ist("%d %b %H:%M") }}</td>
       <td>{{ u.titles }}</td>
       <td>{{ "on" if u.gmail else "off" }}</td>
       <td>
