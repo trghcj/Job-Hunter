@@ -339,12 +339,13 @@ def cmd_set_titles(args: argparse.Namespace) -> int:
 
 
 def cmd_rescore(_: argparse.Namespace) -> int:
-    """Find skills in jobs saved before Phase 4."""
-    from jobhunter.pipeline import backfill_job_skills
+    """Find skills in jobs saved before Phase 4, then re-score every user's jobs."""
+    from jobhunter.pipeline import backfill_job_skills, rescore_all
 
     with _session() as session:
         filled = backfill_job_skills(session)
-    print(f"Skills found for {filled} job(s).")
+        users = rescore_all(session, datetime.now(UTC))
+    print(f"Skills found for {filled} job(s); re-scored {users} user(s).")
     return 0
 
 

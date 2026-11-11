@@ -31,7 +31,6 @@ BUILTIN_PROFILE: dict[str, Any] = {
 }
 BUILTIN_SETTINGS: dict[str, Any] = {
     "digest": {"hour_ist": 7, "minute": 30, "max_jobs": 25},
-    "min_final_score": 0.55,
     "sources": {"adzuna": {"enabled": True}},
     "llm": {"provider": "gemini", "max_calls_per_run": 30},
     "company_watchlist": [],

@@ -62,4 +62,4 @@ def test_rescore_command_backfills(db_session, monkeypatch, capsys):
     assert cli.main(["rescore"]) == 0
     db_session.expire_all()
     assert db_session.scalars(select(Job)).one().skills == ["Java", "Spring Boot"]
-    assert "1 job" in capsys.readouterr().out
+    assert "1 job(s); re-scored" in capsys.readouterr().out
