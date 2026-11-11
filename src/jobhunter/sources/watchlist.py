@@ -11,21 +11,36 @@ from typing import Any
 
 import yaml
 
-BOARD_SITES = ("greenhouse", "lever", "ashby")
+BOARD_SITES = ("greenhouse", "lever", "ashby", "workday", "smartrecruiters")
 DEFAULT_PATH = Path(__file__).resolve().parents[3] / "data" / "company_watchlist.yaml"
 MAX_COMPANIES = 500
-_SLUG = re.compile(r"^[a-z0-9][a-z0-9._-]{0,99}$")
+_CASELESS = {"greenhouse", "lever", "ashby"}  # these sites' board names are lowercase
+_SLUG_RULES = {
+    "greenhouse": re.compile(r"^[a-z0-9][a-z0-9._-]{0,99}$"),
+    "lever": re.compile(r"^[a-z0-9][a-z0-9._-]{0,99}$"),
+    "ashby": re.compile(r"^[a-z0-9][a-z0-9._-]{0,99}$"),
+    # tenant.wdN/Site, e.g. nvidia.wd5/NVIDIAExternalCareerSite
+    "workday": re.compile(r"^[a-z0-9-]{1,60}\.wd\d{1,3}/[A-Za-z0-9_.-]{1,100}$"),
+    "smartrecruiters": re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$"),
+}
 
 
 @dataclass(frozen=True)
 class Company:
     name: str
-    ats: str  # greenhouse | lever | ashby
+    ats: str  # greenhouse | lever | ashby | workday | smartrecruiters
     slug: str  # the company's board name on that site
 
 
+def _make(name: str, ats: str, slug: str) -> Company:
+    ats = ats.strip().lower()
+    slug = slug.strip()
+    return Company(name.strip(), ats, slug.lower() if ats in _CASELESS else slug)
+
+
 def _valid(c: Company) -> bool:
-    return bool(c.name) and len(c.name) <= 80 and c.ats in BOARD_SITES and bool(_SLUG.match(c.slug))
+    rule = _SLUG_RULES.get(c.ats)
+    return bool(c.name) and len(c.name) <= 80 and rule is not None and bool(rule.match(c.slug))
 
 
 def companies_from_setting(value: Any) -> list[Company]:
@@ -34,8 +49,7 @@ def companies_from_setting(value: Any) -> list[Company]:
     for item in value or []:
         if not isinstance(item, dict):
             continue
-        c = Company(str(item.get("name", "")).strip(), str(item.get("ats", "")).strip().lower(),
-                    str(item.get("slug", "")).strip().lower())
+        c = _make(str(item.get("name", "")), str(item.get("ats", "")), str(item.get("slug", "")))
         if _valid(c) and (c.ats, c.slug) not in seen:
             seen.add((c.ats, c.slug))
             out.append(c)
@@ -46,10 +60,31 @@ def companies_to_setting(companies: list[Company]) -> list[dict[str, str]]:
     return [asdict(c) for c in companies]
 
 
-def load_default_watchlist(path: Path = DEFAULT_PATH) -> list[Company]:
+def load_default_entries(path: Path = DEFAULT_PATH) -> list[tuple[Company, int]]:
+    """(company, since): `since` is the watchlist version that added it (default 1)."""
     if not path.exists():
         return []
-    return companies_from_setting(yaml.safe_load(path.read_text(encoding="utf-8")))
+    entries: list[tuple[Company, int]] = []
+    for item in yaml.safe_load(path.read_text(encoding="utf-8")) or []:
+        found = companies_from_setting([item])
+        if found:
+            entries.append((found[0], int(item.get("since", 1))))
+    return entries
+
+
+def load_default_watchlist(path: Path = DEFAULT_PATH) -> list[Company]:
+    return [c for c, _ in load_default_entries(path)]
+
+
+def merge_new_defaults(
+    current: list[Company], entries: list[tuple[Company, int]], seen_version: int
+) -> list[Company]:
+    """Your list plus default companies added after `seen_version`. Companies you removed
+    from an earlier version are not brought back."""
+    present = {(c.ats, c.slug) for c in current}
+    added = [c for c, since in entries
+             if since > seen_version and (c.ats, c.slug) not in present]
+    return current + added
 
 
 def parse_watchlist_text(text: str | None) -> tuple[list[Company], list[str]]:
@@ -64,11 +99,11 @@ def parse_watchlist_text(text: str | None) -> tuple[list[Company], list[str]]:
         if len(parts) != 3:
             errors.append(f"Watchlist line {n}: use 'Name | ats | slug'.")
             continue
-        c = Company(parts[0], parts[1].lower(), parts[2].lower())
+        c = _make(*parts)
         if not _valid(c):
             errors.append(
-                f"Watchlist line {n}: ats must be one of {', '.join(BOARD_SITES)} and the slug "
-                "may only use letters, digits, '.', '_' and '-'."
+                f"Watchlist line {n}: ats must be one of {', '.join(BOARD_SITES)}; the slug "
+                "uses letters, digits, '.', '_' and '-' (Workday: tenant.wdN/Site)."
             )
             continue
         if (c.ats, c.slug) not in seen:

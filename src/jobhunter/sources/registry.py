@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from jobhunter.settings import Settings
 from jobhunter.sources import adzuna
+from jobhunter.sources.amazon import AmazonAdapter
 from jobhunter.sources.ashby import AshbyAdapter
 from jobhunter.sources.base import SourceAdapter
 from jobhunter.sources.catalog import is_enabled
@@ -16,12 +17,16 @@ from jobhunter.sources.greenhouse import GreenhouseAdapter
 from jobhunter.sources.lever import LeverAdapter
 from jobhunter.sources.remoteok import RemoteOKAdapter
 from jobhunter.sources.remotive import RemotiveAdapter
+from jobhunter.sources.smartrecruiters import SmartRecruitersAdapter
 from jobhunter.sources.watchlist import Company
+from jobhunter.sources.workday import WorkdayAdapter
 from jobhunter.usage import DbBudget
 
 log = logging.getLogger(__name__)
 
-BOARD_ADAPTERS = (GreenhouseAdapter, LeverAdapter, AshbyAdapter)
+BOARD_ADAPTERS = (
+    GreenhouseAdapter, LeverAdapter, AshbyAdapter, WorkdayAdapter, SmartRecruitersAdapter
+)
 
 
 def build_adapters(
@@ -50,6 +55,8 @@ def build_adapters(
         adapters.append(RemotiveAdapter())
     if is_enabled(sources, "remoteok"):
         adapters.append(RemoteOKAdapter())
+    if is_enabled(sources, "amazon"):
+        adapters.append(AmazonAdapter())
 
     if not adapters:
         log.warning("No job sources are enabled")

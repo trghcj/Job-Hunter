@@ -70,17 +70,28 @@ def seed_defaults(session: Session, path: Path = DEFAULT_CONFIG) -> None:
 
 
 def seed_watchlist(session: Session) -> None:
-    """Fill an empty company watchlist from data/company_watchlist.yaml, once ever, so a
-    list you clear on purpose stays cleared."""
-    from jobhunter.sources.watchlist import companies_to_setting, load_default_watchlist
+    """Add default companies from data/company_watchlist.yaml that are newer than the
+    version this database has seen. Your edits are kept and removed companies stay removed."""
+    from jobhunter.sources.watchlist import (
+        companies_from_setting,
+        companies_to_setting,
+        load_default_entries,
+        merge_new_defaults,
+    )
 
-    if get_setting(session, "watchlist_seeded"):
+    entries = load_default_entries()
+    latest = max((since for _, since in entries), default=1)
+    seen = get_setting(session, "watchlist_version")
+    if seen is None:
+        seen = 1 if get_setting(session, "watchlist_seeded") else 0
+    if int(seen) >= latest:
         return
-    if not get_setting(session, "company_watchlist"):
-        companies = load_default_watchlist()
-        set_setting(session, "company_watchlist", companies_to_setting(companies))
-        log.info("Seeded company watchlist with %d companies", len(companies))
+    current = companies_from_setting(get_setting(session, "company_watchlist", []))
+    merged = merge_new_defaults(current, entries, int(seen))
+    set_setting(session, "company_watchlist", companies_to_setting(merged))
+    set_setting(session, "watchlist_version", latest)
     set_setting(session, "watchlist_seeded", True)
+    log.info("Watchlist: added %d companies (now %d)", len(merged) - len(current), len(merged))
 
 
 def profile_to_search(row: SearchProfile) -> Search:

@@ -1,0 +1,606 @@
+{
+ "offset": 0,
+ "limit": 5,
+ "totalFound": 189,
+ "content": [
+  {
+   "id": "6000000001569554",
+   "name": "Manager- Supply Strategy",
+   "uuid": "7bd65b7c-8981-4f98-991c-12cf042d8749",
+   "jobAdId": "c9257255-32a8-4e08-bc27-64dea189d2eb",
+   "defaultJobAd": true,
+   "refNumber": "REF1216R",
+   "company": {
+    "identifier": "SWIGGY",
+    "name": "SWIGGY"
+   },
+   "releasedDate": "2026-11-11T07:21:11.252Z",
+   "location": {
+    "city": "Bengaluru",
+    "region": "KA",
+    "country": "in",
+    "remote": false,
+    "hybrid": false,
+    "latitude": "12.9628957",
+    "longitude": "77.57754",
+    "fullLocation": "Bengaluru, KA, India"
+   },
+   "industry": {
+    "id": "it_and_services",
+    "label": "Information Technology And Services"
+   },
+   "department": {},
+   "function": {
+    "id": "other",
+    "label": "Other"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "mid_senior_level",
+    "label": "Mid-Senior Level"
+   },
+   "customField": [
+    {
+     "fieldId": "6a38e3343a9cfc83b40cca20",
+     "fieldLabel": "Job Family",
+     "valueId": "21249349",
+     "valueLabel": "Operations (Food Marketplace)"
+    },
+    {
+     "fieldId": "6a38e33b7b24703227946ab9",
+     "fieldLabel": "Employment Type",
+     "valueId": "6092",
+     "valueLabel": "Permanent"
+    },
+    {
+     "fieldId": "6a38e34e3a9cfc83b40cca24",
+     "fieldLabel": "Team",
+     "valueId": "1650255",
+     "valueLabel": "Supply Strategy"
+    },
+    {
+     "fieldId": "COUNTRY",
+     "fieldLabel": "Country/Region",
+     "valueId": "in",
+     "valueLabel": "India"
+    },
+    {
+     "fieldId": "6a38e3473a9cfc83b40cca22",
+     "fieldLabel": "BusinessUnit",
+     "valueId": "1536086",
+     "valueLabel": "Food Marketplace"
+    },
+    {
+     "fieldId": "6a38e3377b24703227946ab8",
+     "fieldLabel": "Job Code",
+     "valueId": "21274971",
+     "valueLabel": "Manager - Supply"
+    },
+    {
+     "fieldId": "6a33c419e54dfa765b16df1f",
+     "fieldLabel": "Brands",
+     "valueId": "default",
+     "valueLabel": "SWIGGY"
+    },
+    {
+     "fieldId": "6a38e3447b24703227946abb",
+     "fieldLabel": "LegalEntity",
+     "valueId": "1465198",
+     "valueLabel": "Swiggy Limited"
+    },
+    {
+     "fieldId": "6a38e3527b24703227946abc",
+     "fieldLabel": "Location",
+     "valueId": "2598",
+     "valueLabel": "Sumadhura Capitol Towers"
+    },
+    {
+     "fieldId": "6a38e3417b24703227946aba",
+     "fieldLabel": "Grade",
+     "valueId": "586",
+     "valueLabel": "7"
+    },
+    {
+     "fieldId": "6a38e34a3a9cfc83b40cca23",
+     "fieldLabel": "Department.",
+     "valueId": "1643489",
+     "valueLabel": "Supply COE"
+    }
+   ],
+   "visibility": "PUBLIC",
+   "ref": "https://api.smartrecruiters.com/v1/companies/Swiggy/postings/6000000001569554",
+   "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+   }
+  },
+  {
+   "id": "6000000001568695",
+   "name": "Sales Manager II",
+   "uuid": "75244889-eb6a-4b9d-965d-c491121efafb",
+   "jobAdId": "02b981bd-f32b-45da-a91f-c25baacb79f8",
+   "defaultJobAd": true,
+   "refNumber": "REF1824Y",
+   "company": {
+    "identifier": "SWIGGY",
+    "name": "SWIGGY"
+   },
+   "releasedDate": "2026-11-11T05:30:39.102Z",
+   "location": {
+    "city": "Moradabad",
+    "region": "UP",
+    "country": "in",
+    "remote": false,
+    "hybrid": false,
+    "latitude": "28.8386481",
+    "longitude": "78.7733286",
+    "fullLocation": "Moradabad, UP, India"
+   },
+   "industry": {
+    "id": "internet",
+    "label": "Internet"
+   },
+   "department": {},
+   "function": {
+    "id": "sales",
+    "label": "Sales"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "not_applicable",
+    "label": "Not Applicable"
+   },
+   "customField": [
+    {
+     "fieldId": "6a38e3343a9cfc83b40cca20",
+     "fieldLabel": "Job Family",
+     "valueId": "21249357",
+     "valueLabel": "Sales Manager II"
+    },
+    {
+     "fieldId": "6a38e33b7b24703227946ab9",
+     "fieldLabel": "Employment Type",
+     "valueId": "6092",
+     "valueLabel": "Permanent"
+    },
+    {
+     "fieldId": "6a38e34e3a9cfc83b40cca24",
+     "fieldLabel": "Team",
+     "valueId": "1649720",
+     "valueLabel": "Sales"
+    },
+    {
+     "fieldId": "COUNTRY",
+     "fieldLabel": "Country/Region",
+     "valueId": "in",
+     "valueLabel": "India"
+    },
+    {
+     "fieldId": "6a38e3473a9cfc83b40cca22",
+     "fieldLabel": "BusinessUnit",
+     "valueId": "1536086",
+     "valueLabel": "Food Marketplace"
+    },
+    {
+     "fieldId": "6a38e3377b24703227946ab8",
+     "fieldLabel": "Job Code",
+     "valueId": "21275161",
+     "valueLabel": "Sales Manager II"
+    },
+    {
+     "fieldId": "6ad08f513f9766a3ec4a0a2d",
+     "fieldLabel": "Work Mandate",
+     "valueId": "40083",
+     "valueLabel": "Work from Office - 5 Days"
+    },
+    {
+     "fieldId": "6a33c419e54dfa765b16df1f",
+     "fieldLabel": "Brands",
+     "valueId": "default",
+     "valueLabel": "SWIGGY"
+    },
+    {
+     "fieldId": "6a38e3447b24703227946abb",
+     "fieldLabel": "LegalEntity",
+     "valueId": "1465198",
+     "valueLabel": "Swiggy Limited"
+    },
+    {
+     "fieldId": "6a38e3527b24703227946abc",
+     "fieldLabel": "Location",
+     "valueId": "1261",
+     "valueLabel": "Metro Tower - SNO"
+    },
+    {
+     "fieldId": "6a38e3417b24703227946aba",
+     "fieldLabel": "Grade",
+     "valueId": "583",
+     "valueLabel": "4"
+    },
+    {
+     "fieldId": "6a38e34a3a9cfc83b40cca23",
+     "fieldLabel": "Department.",
+     "valueId": "1645025",
+     "valueLabel": "Sales"
+    }
+   ],
+   "visibility": "PUBLIC",
+   "ref": "https://api.smartrecruiters.com/v1/companies/Swiggy/postings/6000000001568695",
+   "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+   }
+  },
+  {
+   "id": "6000000001568408",
+   "name": "Growth Associate",
+   "uuid": "9cd10516-337b-40e6-b4a3-09bf8296f581",
+   "jobAdId": "983ae6a9-251b-45e0-8d9d-6d9be9fbe388",
+   "defaultJobAd": true,
+   "refNumber": "REF1958T",
+   "company": {
+    "identifier": "SWIGGY",
+    "name": "SWIGGY"
+   },
+   "releasedDate": "2026-11-11T04:58:38.504Z",
+   "location": {
+    "city": "Raipur",
+    "region": "CG",
+    "country": "in",
+    "remote": false,
+    "hybrid": false,
+    "latitude": "21.2513844",
+    "longitude": "81.62964130000002",
+    "fullLocation": "Raipur, CG, India"
+   },
+   "industry": {
+    "id": "internet",
+    "label": "Internet"
+   },
+   "department": {},
+   "function": {
+    "id": "sales",
+    "label": "Sales"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "executive",
+    "label": "Executive"
+   },
+   "customField": [
+    {
+     "fieldId": "6a38e3343a9cfc83b40cca20",
+     "fieldLabel": "Job Family",
+     "valueId": "21249355",
+     "valueLabel": "Sales"
+    },
+    {
+     "fieldId": "6a38e33b7b24703227946ab9",
+     "fieldLabel": "Employment Type",
+     "valueId": "6092",
+     "valueLabel": "Permanent"
+    },
+    {
+     "fieldId": "6a38e34e3a9cfc83b40cca24",
+     "fieldLabel": "Team",
+     "valueId": "1536381",
+     "valueLabel": "Sales"
+    },
+    {
+     "fieldId": "COUNTRY",
+     "fieldLabel": "Country/Region",
+     "valueId": "in",
+     "valueLabel": "India"
+    },
+    {
+     "fieldId": "6a38e3473a9cfc83b40cca22",
+     "fieldLabel": "BusinessUnit",
+     "valueId": "1536086",
+     "valueLabel": "Food Marketplace"
+    },
+    {
+     "fieldId": "6a38e3377b24703227946ab8",
+     "fieldLabel": "Job Code",
+     "valueId": "24049051",
+     "valueLabel": "Associate Sales Manager"
+    },
+    {
+     "fieldId": "6ad08f513f9766a3ec4a0a2d",
+     "fieldLabel": "Work Mandate",
+     "valueId": "40083",
+     "valueLabel": "Work from Office - 5 Days"
+    },
+    {
+     "fieldId": "6a33c419e54dfa765b16df1f",
+     "fieldLabel": "Brands",
+     "valueId": "default",
+     "valueLabel": "SWIGGY"
+    },
+    {
+     "fieldId": "6a38e3447b24703227946abb",
+     "fieldLabel": "LegalEntity",
+     "valueId": "1465198",
+     "valueLabel": "Swiggy Limited"
+    },
+    {
+     "fieldId": "6a38e3527b24703227946abc",
+     "fieldLabel": "Location",
+     "valueId": "1304",
+     "valueLabel": "Raipur- SNO"
+    },
+    {
+     "fieldId": "6a38e3417b24703227946aba",
+     "fieldLabel": "Grade",
+     "valueId": "582",
+     "valueLabel": "3"
+    },
+    {
+     "fieldId": "6a38e34a3a9cfc83b40cca23",
+     "fieldLabel": "Department.",
+     "valueId": "1565813",
+     "valueLabel": "India Next"
+    }
+   ],
+   "visibility": "PUBLIC",
+   "ref": "https://api.smartrecruiters.com/v1/companies/Swiggy/postings/6000000001568408",
+   "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+   }
+  },
+  {
+   "id": "6000000001565537",
+   "name": "Growth Manager II",
+   "uuid": "0082ace7-d926-4a51-985f-029d3f39deea",
+   "jobAdId": "050573a0-2dd6-46bf-b967-7defe6ed98ac",
+   "defaultJobAd": true,
+   "refNumber": "REF2032G",
+   "company": {
+    "identifier": "SWIGGY",
+    "name": "SWIGGY"
+   },
+   "releasedDate": "2026-11-10T16:22:02.130Z",
+   "location": {
+    "city": "Puri",
+    "region": "OD",
+    "country": "in",
+    "remote": false,
+    "hybrid": false,
+    "latitude": "19.8134554",
+    "longitude": "85.8312359",
+    "fullLocation": "Puri, OD, India"
+   },
+   "industry": {
+    "id": "it_and_services",
+    "label": "Information Technology And Services"
+   },
+   "department": {},
+   "function": {
+    "id": "sales",
+    "label": "Sales"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "not_applicable",
+    "label": "Not Applicable"
+   },
+   "customField": [
+    {
+     "fieldId": "6a38e3343a9cfc83b40cca20",
+     "fieldLabel": "Job Family",
+     "valueId": "24919876",
+     "valueLabel": "Growth Manager II"
+    },
+    {
+     "fieldId": "6a38e33b7b24703227946ab9",
+     "fieldLabel": "Employment Type",
+     "valueId": "6092",
+     "valueLabel": "Permanent"
+    },
+    {
+     "fieldId": "6a38e34e3a9cfc83b40cca24",
+     "fieldLabel": "Team",
+     "valueId": "1536381",
+     "valueLabel": "Sales"
+    },
+    {
+     "fieldId": "COUNTRY",
+     "fieldLabel": "Country/Region",
+     "valueId": "in",
+     "valueLabel": "India"
+    },
+    {
+     "fieldId": "6a38e3473a9cfc83b40cca22",
+     "fieldLabel": "BusinessUnit",
+     "valueId": "1536086",
+     "valueLabel": "Food Marketplace"
+    },
+    {
+     "fieldId": "6a38e3377b24703227946ab8",
+     "fieldLabel": "Job Code",
+     "valueId": "24919879",
+     "valueLabel": "Growth Manager II"
+    },
+    {
+     "fieldId": "6ad08f513f9766a3ec4a0a2d",
+     "fieldLabel": "Work Mandate",
+     "valueId": "40083",
+     "valueLabel": "Work from Office - 5 Days"
+    },
+    {
+     "fieldId": "6a33c419e54dfa765b16df1f",
+     "fieldLabel": "Brands",
+     "valueId": "default",
+     "valueLabel": "SWIGGY"
+    },
+    {
+     "fieldId": "6a38e3447b24703227946abb",
+     "fieldLabel": "LegalEntity",
+     "valueId": "1465198",
+     "valueLabel": "Swiggy Limited"
+    },
+    {
+     "fieldId": "6a38e3527b24703227946abc",
+     "fieldLabel": "Location",
+     "valueId": "1022",
+     "valueLabel": "Saheed Nagar City office"
+    },
+    {
+     "fieldId": "6a38e3417b24703227946aba",
+     "fieldLabel": "Grade",
+     "valueId": "583",
+     "valueLabel": "4"
+    },
+    {
+     "fieldId": "6a38e34a3a9cfc83b40cca23",
+     "fieldLabel": "Department.",
+     "valueId": "1565813",
+     "valueLabel": "India Next"
+    }
+   ],
+   "visibility": "PUBLIC",
+   "ref": "https://api.smartrecruiters.com/v1/companies/Swiggy/postings/6000000001565537",
+   "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+   }
+  },
+  {
+   "id": "6000000001561491",
+   "name": "Lead - Business Development",
+   "uuid": "3550f61c-5ca5-45c3-8ce3-ba17a5df7361",
+   "jobAdId": "133cbca2-4f38-4b52-8a76-d3511de6b894",
+   "defaultJobAd": true,
+   "refNumber": "REF1836L",
+   "company": {
+    "identifier": "SWIGGY",
+    "name": "SWIGGY"
+   },
+   "releasedDate": "2026-11-09T16:39:12.458Z",
+   "location": {
+    "city": "Mumbai",
+    "region": "MH",
+    "country": "in",
+    "remote": false,
+    "hybrid": false,
+    "latitude": "18.9582347",
+    "longitude": "72.8319514",
+    "fullLocation": "Mumbai, MH, India"
+   },
+   "industry": {
+    "id": "food_and_beverages",
+    "label": "Food And Beverages"
+   },
+   "department": {},
+   "function": {
+    "id": "business_development",
+    "label": "Business Development"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "associate",
+    "label": "Associate"
+   },
+   "customField": [
+    {
+     "fieldId": "6a38e3343a9cfc83b40cca20",
+     "fieldLabel": "Job Family",
+     "valueId": "21249355",
+     "valueLabel": "Sales"
+    },
+    {
+     "fieldId": "6a38e33b7b24703227946ab9",
+     "fieldLabel": "Employment Type",
+     "valueId": "6092",
+     "valueLabel": "Permanent"
+    },
+    {
+     "fieldId": "6a38e34e3a9cfc83b40cca24",
+     "fieldLabel": "Team",
+     "valueId": "1649598",
+     "valueLabel": "BD & IP"
+    },
+    {
+     "fieldId": "COUNTRY",
+     "fieldLabel": "Country/Region",
+     "valueId": "in",
+     "valueLabel": "India"
+    },
+    {
+     "fieldId": "6a38e3473a9cfc83b40cca22",
+     "fieldLabel": "BusinessUnit",
+     "valueId": "1536091",
+     "valueLabel": "Dine Out"
+    },
+    {
+     "fieldId": "6a38e3377b24703227946ab8",
+     "fieldLabel": "Job Code",
+     "valueId": "24049051",
+     "valueLabel": "Associate Sales Manager"
+    },
+    {
+     "fieldId": "6ad08f513f9766a3ec4a0a2d",
+     "fieldLabel": "Work Mandate",
+     "valueId": "40083",
+     "valueLabel": "Work from Office - 5 Days"
+    },
+    {
+     "fieldId": "6a33c419e54dfa765b16df1f",
+     "fieldLabel": "Brands",
+     "valueId": "default",
+     "valueLabel": "SWIGGY"
+    },
+    {
+     "fieldId": "6a38e3447b24703227946abb",
+     "fieldLabel": "LegalEntity",
+     "valueId": "1465198",
+     "valueLabel": "Swiggy Limited"
+    },
+    {
+     "fieldId": "6a38e3527b24703227946abc",
+     "fieldLabel": "Location",
+     "valueId": "857",
+     "valueLabel": "Navi Mumbai - SNO"
+    },
+    {
+     "fieldId": "6a38e3417b24703227946aba",
+     "fieldLabel": "Grade",
+     "valueId": "584",
+     "valueLabel": "5"
+    },
+    {
+     "fieldId": "6a38e34a3a9cfc83b40cca23",
+     "fieldLabel": "Department.",
+     "valueId": "7681999",
+     "valueLabel": "Scenes"
+    }
+   ],
+   "visibility": "PUBLIC",
+   "ref": "https://api.smartrecruiters.com/v1/companies/Swiggy/postings/6000000001561491",
+   "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+   }
+  }
+ ]
+}

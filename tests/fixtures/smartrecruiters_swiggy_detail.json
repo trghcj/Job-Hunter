@@ -1,0 +1,142 @@
+{
+ "id": "6000000001569554",
+ "name": "Manager- Supply Strategy",
+ "uuid": "7bd65b7c-8981-4f98-991c-12cf042d8749",
+ "jobId": "1ab7164d-7829-4fa3-a35d-6e4afa557088",
+ "jobAdId": "c9257255-32a8-4e08-bc27-64dea189d2eb",
+ "defaultJobAd": true,
+ "refNumber": "REF1216R",
+ "company": {
+  "name": "SWIGGY",
+  "identifier": "SWIGGY"
+ },
+ "location": {
+  "city": "Bengaluru",
+  "region": "KA",
+  "country": "in",
+  "remote": false,
+  "hybrid": false,
+  "latitude": "12.9628957",
+  "longitude": "77.57754",
+  "fullLocation": "Bengaluru, KA, India"
+ },
+ "customField": [
+  {
+   "fieldId": "6a38e3343a9cfc83b40cca20",
+   "fieldLabel": "Job Family",
+   "valueId": "21249349",
+   "valueLabel": "Operations (Food Marketplace)"
+  },
+  {
+   "fieldId": "6a38e33b7b24703227946ab9",
+   "fieldLabel": "Employment Type",
+   "valueId": "6092",
+   "valueLabel": "Permanent"
+  },
+  {
+   "fieldId": "6a38e34e3a9cfc83b40cca24",
+   "fieldLabel": "Team",
+   "valueId": "1650255",
+   "valueLabel": "Supply Strategy"
+  },
+  {
+   "fieldId": "COUNTRY",
+   "fieldLabel": "Country/Region",
+   "valueId": "in",
+   "valueLabel": "India"
+  },
+  {
+   "fieldId": "6a38e3473a9cfc83b40cca22",
+   "fieldLabel": "BusinessUnit",
+   "valueId": "1536086",
+   "valueLabel": "Food Marketplace"
+  },
+  {
+   "fieldId": "6a38e3377b24703227946ab8",
+   "fieldLabel": "Job Code",
+   "valueId": "21274971",
+   "valueLabel": "Manager - Supply"
+  },
+  {
+   "fieldId": "6a33c419e54dfa765b16df1f",
+   "fieldLabel": "Brands",
+   "valueId": "default",
+   "valueLabel": "SWIGGY"
+  },
+  {
+   "fieldId": "6a38e3447b24703227946abb",
+   "fieldLabel": "LegalEntity",
+   "valueId": "1465198",
+   "valueLabel": "Swiggy Limited"
+  },
+  {
+   "fieldId": "6a38e3527b24703227946abc",
+   "fieldLabel": "Location",
+   "valueId": "2598",
+   "valueLabel": "Sumadhura Capitol Towers"
+  },
+  {
+   "fieldId": "6a38e3417b24703227946aba",
+   "fieldLabel": "Grade",
+   "valueId": "586",
+   "valueLabel": "7"
+  },
+  {
+   "fieldId": "6a38e34a3a9cfc83b40cca23",
+   "fieldLabel": "Department.",
+   "valueId": "1643489",
+   "valueLabel": "Supply COE"
+  }
+ ],
+ "releasedDate": "2026-11-11T07:21:11.252Z",
+ "creator": {
+  "name": "",
+  "avatarUrl": ""
+ },
+ "postingUrl": "https://jobs.smartrecruiters.com/SWIGGY/6000000001569554-manager-supply-strategy",
+ "applyUrl": "https://jobs.smartrecruiters.com/SWIGGY/6000000001569554-manager-supply-strategy?oga=true",
+ "referralUrl": "https://jobs.smartrecruiters.com/external-referrals/company/SWIGGY/publication/7bd65b7c-8981-4f98-991c-12cf042d8749?dcr_ci=SWIGGY",
+ "jobAd": {
+  "sections": {
+   "companyDescription": {
+    "title": "Company Description",
+    "text": "<p><strong>About Swiggy</strong></p><p><strong>Swiggy is India’s leading on-demand convenience platform. We take a tech-first approach to logistics and a solution-first approach to what consumers need. We operate in 500+ cities and partner with hundreds of thousands of restaurants. We also work with more than 2 lakh independent Delivery Executives, and our own team is 5,000+ people. Our platform runs on strong ML and processes terabytes of data every day, so we can give millions of customers fast, reliable delivery.</strong></p><p><strong>We started in 2014 as a hyperlocal food delivery service. Today we’re India’s leading on-demand convenience platform. We care as much about being a good place to work as we do about delivering fast for our customers.</strong></p>"
+   },
+   "jobDescription": {
+    "title": "Job Description",
+    "text": "<p><strong>About the Team</strong></p><p><strong>Rx Excellence is part of Swiggy’s Supply COE and owns the experience of our restaurant partners. We want Swiggy to be the easiest and most rewarding platform for a restaurant partner to grow on.</strong></p><p><strong>We measure our success through Partner NPS, CSAT and fewer partner support tickets.</strong></p><p><strong>About the Role</strong></p><p><strong>As Manager, Supply Strategy, you’ll work directly with the GM, Rx Excellence. You’ll own a set of partner experience initiatives from the first problem discovery through to measurable impact. You’ll dig into what makes partners unhappy and work out the fix with product, business and operations teams. Then you’ll make sure the fix actually moves the numbers.&#xa0;</strong></p><p><strong>What You’ll Do</strong></p><ul><li><p><strong>Own partner experience initiatives end to end. Lead projects across Partner App enhancements, AI-led partner tools, payout and consent transparency, self-serve growth and menu controls, and partner support quality.</strong></p></li><li><p><strong>Find the root cause. Analyse NPS verbatims, detractor themes and partner support ticket data to understand why partners are unhappy, then turn that into a prioritised plan.</strong></p></li><li><p><strong>Improve partner support and AM effectiveness. Work with account management and support teams to reduce ticket volumes, improve resolution TAT and raise the quality of AM interactions.</strong></p></li><li><p><strong>Drive growth and cost economics. Support central projects that balance partner growth against the cost of doing business, and track how they affect partner outcomes.</strong></p></li><li><p><strong>Align stakeholders and drive execution. Work with product, analytics, city business heads, account management, finance and marketing to agree on goals and keep projects on track.</strong></p></li><li><p><strong>Build the measurement layer. Create dashboards, trackers and scorecards for Partner NPS, CSAT, ticket trends and initiative impact. Set up self-serve reporting that teams actually use.</strong></p></li><li><p><strong>Fix processes for scale. Find gaps in partner-facing processes such as onboarding, escalations and deductions. Design SOPs and guardrails that work across cities and partner segments.</strong></p></li><li><p><strong>Report to leadership. Run regular reviews and turn complex data into crisp stories for leadership updates.</strong></p></li></ul>"
+   },
+   "qualifications": {
+    "title": "Qualifications",
+    "text": "<p><strong>What We’re Looking For</strong></p><ul><li><p><strong>A B.Tech from a Tier 1 institute (IITs, NITs, BITS or equivalent) or an MBA from a Tier 1 B-school (IIMs, ISB, XLRI, FMS or equivalent)&#xa0;</strong></p></li><li><p><strong>2 to 4 years of experience in strategy, business operations, program management or analytics, ideally at a consumer internet company, consulting firm or high-growth startup</strong></p></li><li><p><strong>Strong hands-on skills in SQL and Excel (mandatory)</strong></p></li><li><p><strong>Ability to break down unclear problems and find the answer in the data</strong></p></li><li><p><strong>Clear written and verbal communication, including writing for senior leadership</strong></p></li><li><p><strong>Comfort working with many stakeholders and getting results without direct authority</strong></p></li><li><p><strong>A high ownership mindset and a focus on getting things done</strong></p></li></ul><p><strong>Good to Have</strong></p><ul><li><p><strong>Experience in a marketplace, B2B or partner-facing business, especially restaurant or merchant experience</strong></p></li><li><p><strong>Exposure to NPS or customer experience programs, support operations or ticket analytics</strong></p></li><li><p><strong>Experience working with product teams on feature launches</strong></p></li><li><p><strong>Familiarity with Power BI, Tableau or similar tools</strong></p></li></ul>"
+   },
+   "additionalInformation": {
+    "title": "Additional Information",
+    "text": "<p>\"<strong>We are an equal opportunity employer and all qualified applicants will receive consideration for employment without regards to race, color, religion, sex, disability status, or any other characteristic protected by the law\"</strong></p><div sr-tagline=\"\"></div><p><strong>Visit our tech blogs to learn more about some the challenges we deal with:&#xa0;https://medium.com/swiggy-bytes</strong></p><p><strong>We are an equal opportunity employer and all qualified applicants will receive consideration for employment without regard to race, colour, religion, sex, disability status, or any other characteristic protected by the law.</strong></p>"
+   }
+  }
+ },
+ "active": true,
+ "visibility": "PUBLIC",
+ "industry": {
+  "id": "it_and_services",
+  "label": "Information Technology And Services"
+ },
+ "function": {
+  "id": "other",
+  "label": "Other"
+ },
+ "experienceLevel": {
+  "id": "mid_senior_level",
+  "label": "Mid-Senior Level"
+ },
+ "typeOfEmployment": {
+  "id": "permanent",
+  "label": "Full-time"
+ },
+ "language": {
+  "code": "en",
+  "label": "English",
+  "labelNative": "English (US)"
+ }
+}

@@ -181,6 +181,30 @@ def test_entry_level_titles_kept(title):
     assert ok
 
 
+@pytest.mark.parametrize(
+    ("title", "ok"),
+    [
+        ("SDE II - Backend", True),
+        ("Software Engineer 2", True),
+        ("Intermediate Backend Engineer", True),
+        ("SDE III", True),
+        ("Software Engineer 3", True),
+        ("SDE IV - Backend", False),
+        ("Senior Backend Engineer", False),
+        ("Staff Software Engineer", False),
+        ("Tech Lead - Python", False),
+        ("Backend Engineer", True),
+    ],
+)
+def test_levels_for_zero_to_four_years(title, ok):
+    kept, reason, _ = check_experience(title, "", min_years=0, max_years=4)
+    assert kept is ok, reason
+
+
+def test_senior_allowed_from_five_years():
+    assert check_experience("Senior Backend Engineer", "", 3, 5)[0]
+
+
 def test_level_titles_allowed_for_experienced_search():
     ok, _, _ = check_experience("Software Engineer II", "", min_years=2, max_years=5)
     assert ok

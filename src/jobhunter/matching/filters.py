@@ -101,11 +101,23 @@ _SENIOR = re.compile(
     r"\b(senior|sr|lead|principal|manager|architect|head|director|staff|vp|vice president"
     r"|chief)\b"
 )
-# Level markers that mean roughly 2+ years: "Engineer II", "SDE 3", "MTS-2", "Intermediate".
+# Level markers in titles: "Engineer II", "SDE 3", "MTS-2", "Intermediate".
 _LEVEL = re.compile(
-    r"\b(?:ii|iii|iv)\b|\b(?:sde|mts|engineer|developer)[- ]?[2-9]\b"
-    r"|\b(?:intermediate|mid[- ]level|experienced)\b"
+    r"\b(ii|iii|iv)\b|\b(?:sde|mts|engineer|developer)[- ]?([2-9])\b"
+    r"|\b(intermediate|mid[- ]level|experienced)\b"
 )
+_ROMAN_LEVEL_YEARS = {"ii": 2, "iii": 4, "iv": 6}
+SENIOR_MIN_YEARS = 5  # Senior/Staff/Lead/... titles usually ask for about 5+ years
+
+
+def level_years(m: re.Match[str]) -> int:
+    """Rough minimum years a level marker implies: II/2 -> 2, III/3 -> 4, IV/4+ -> 6."""
+    roman, digit, word = m.groups()
+    if roman:
+        return _ROMAN_LEVEL_YEARS[roman]
+    if digit:
+        return {2: 2, 3: 4}.get(int(digit), 6)
+    return 2
 _ENTRY = re.compile(
     r"\b(freshers?|entry[- ]level|graduates?|trainee|junior|jr|associate|new grad|campus)\b"
 )
@@ -115,7 +127,6 @@ _SINGLE = re.compile(
     rf"(?:(?:minimum|min\.?|at\s*least)\s*(?:of\s*)?)?(\d{{1,2}})\s*(?:\+|plus)?\s*{_YEARS}"
 )
 _EXPERIENCE_CONTEXT = re.compile(r"\bexp")
-SENIOR_TITLE_MAX_YEARS = 3  # senior titles are dropped only for searches below this
 
 
 def _experience_mentions(text: str) -> list[tuple[int, int | None]]:
@@ -143,9 +154,9 @@ def check_experience(
 ) -> tuple[bool, str | None, bool]:
     """(keep, reason, experience_unstated)."""
     title_l = title.lower()
-    if max_years < SENIOR_TITLE_MAX_YEARS and (m := _SENIOR.search(title_l)):
+    if max_years < SENIOR_MIN_YEARS and (m := _SENIOR.search(title_l)):
         return False, f"senior title ({m.group(1)})", False
-    if max_years < SENIOR_TITLE_MAX_YEARS and (m := _LEVEL.search(title_l)):
+    if (m := _LEVEL.search(title_l)) and level_years(m) > max_years:
         return False, f"level title ({m.group(0)})", False
 
     text = f"{title_l} {(description or '').lower()}"

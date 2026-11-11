@@ -7,6 +7,8 @@ WATCHLIST = [
     Company("CRED", "lever", "cred"),
     Company("Paytm", "lever", "paytm"),
     Company("Atlan", "ashby", "atlan"),
+    Company("Citi", "workday", "citi.wd5/2"),
+    Company("Swiggy", "smartrecruiters", "Swiggy"),
 ]
 NO_KEYS = Settings(adzuna_app_id="", adzuna_app_key="")
 
@@ -17,7 +19,8 @@ def names(adapters):
 
 def test_new_sources_are_on_by_default():
     adapters = build_adapters(None, NO_KEYS, {}, WATCHLIST)
-    assert names(adapters) == ["greenhouse", "lever", "ashby", "remotive", "remoteok"]
+    assert names(adapters) == ["greenhouse", "lever", "ashby", "workday", "smartrecruiters",
+                               "remotive", "remoteok", "amazon"]
     by_name = {a.name: a for a in adapters}
     assert [c.slug for c in by_name["lever"].companies] == ["cred", "paytm"]
     assert [c.slug for c in by_name["greenhouse"].companies] == ["groww"]
@@ -26,7 +29,7 @@ def test_new_sources_are_on_by_default():
 def test_sources_can_be_switched_off():
     sources = {"remotive": {"enabled": False}, "lever": {"enabled": False}}
     assert names(build_adapters(None, NO_KEYS, sources, WATCHLIST)) == [
-        "greenhouse", "ashby", "remoteok"
+        "greenhouse", "ashby", "workday", "smartrecruiters", "remoteok", "amazon"
     ]
 
 

@@ -15,7 +15,9 @@ from jobhunter.sources.lever import LeverAdapter, parse_lever
 from jobhunter.sources.watchlist import (
     Company,
     format_watchlist,
+    load_default_entries,
     load_default_watchlist,
+    merge_new_defaults,
     parse_watchlist_text,
 )
 
@@ -51,7 +53,9 @@ def test_prefilter_drops_elsewhere_and_plain_remote(location):
 def test_default_watchlist_is_valid():
     companies = load_default_watchlist()
     assert len(companies) >= 50
-    assert {c.ats for c in companies} == {"greenhouse", "lever", "ashby"}
+    assert {"greenhouse", "lever", "ashby", "workday", "smartrecruiters"} <= {
+        c.ats for c in companies
+    }
     assert Company("Paytm", "lever", "paytm") in companies
 
 
@@ -73,6 +77,22 @@ def test_watchlist_text_round_trip():
 def test_watchlist_rejects_bad_lines(line):
     companies, errors = parse_watchlist_text(line)
     assert companies == [] and len(errors) == 1
+
+
+def test_merge_new_defaults_adds_only_newer_and_respects_removals():
+    a, b, c = (Company("A", "lever", "a"), Company("B", "lever", "b"),
+               Company("C", "workday", "c.wd5/Ext"))
+    entries = [(a, 1), (b, 1), (c, 2)]
+    # user removed B after version 1; version 2 adds C only
+    assert merge_new_defaults([a], entries, seen_version=1) == [a, c]
+    assert merge_new_defaults([], entries, seen_version=0) == [a, b, c]
+    assert merge_new_defaults([a, c], entries, seen_version=1) == [a, c]
+
+
+def test_default_watchlist_has_version_2_companies():
+    entries = load_default_entries()
+    assert any(since == 2 and c.ats == "workday" for c, since in entries)
+    assert any(c.ats == "smartrecruiters" and c.slug == "Swiggy" for c, _ in entries)
 
 
 def test_watchlist_drops_duplicates():
@@ -101,7 +121,7 @@ def test_greenhouse_fetches_detail_only_for_matches():
 
     adapter = GreenhouseAdapter([Company("Groww", "greenhouse", "groww")], client(handler),
                                 delay=0)
-    jobs = list(adapter.fetch(Search(titles=[first["title"]])))
+    jobs = list(adapter.fetch(Search(titles=[first["title"]], max_years=30)))
     assert len(jobs) == 1
     job = jobs[0]
     assert job.source == "greenhouse" and job.company == "Groww"
@@ -111,6 +131,17 @@ def test_greenhouse_fetches_detail_only_for_matches():
     assert job.posted_at == datetime.fromisoformat(first["first_published"])
     assert job.url == first["absolute_url"]
     assert sum(1 for c in calls if "/jobs/" in c) == 1  # one detail call, not five
+
+
+def test_board_prefilter_skips_titles_too_senior_for_you():
+    lever = [{"id": "1", "text": "Senior Backend Engineer", "hostedUrl": "u1",
+              "categories": {"location": "Pune"}},
+             {"id": "2", "text": "Backend Engineer", "hostedUrl": "u2",
+              "categories": {"location": "Pune"}}]
+    adapter = LeverAdapter([Company("A", "lever", "a")],
+                           client(lambda r: httpx.Response(200, json=lever)), delay=0)
+    jobs = list(adapter.fetch(Search(titles=["Backend Engineer"], max_years=4)))
+    assert [j.url for j in jobs] == ["u2"]
 
 
 def test_greenhouse_no_title_match_no_detail_calls():

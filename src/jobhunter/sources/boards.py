@@ -14,7 +14,7 @@ from typing import Any
 
 import httpx
 
-from jobhunter.matching.filters import title_matches
+from jobhunter.matching.filters import check_experience, title_matches
 from jobhunter.models import RawJob
 from jobhunter.normalize import detect_city, detect_country
 from jobhunter.sources.base import Search
@@ -41,7 +41,13 @@ def india_or_open_remote(location: str | None) -> bool:
 
 
 def wanted(title: str, location: str | None, search: Search) -> bool:
-    return title_matches(title, search.titles) and india_or_open_remote(location)
+    """Title matches, place fits, and the title alone is not too senior for your range.
+    Checked before any description is fetched, to keep requests few."""
+    return (
+        title_matches(title, search.titles)
+        and india_or_open_remote(location)
+        and check_experience(title, None, search.min_years, search.max_years)[0]
+    )
 
 
 def _describe(exc: Exception) -> str:
@@ -74,6 +80,11 @@ class BoardAdapter:
 
     def get_json(self, url: str, **params: Any) -> Any:
         resp = self.client.get(url, params=params or None)
+        resp.raise_for_status()
+        return resp.json()
+
+    def post_json(self, url: str, body: dict[str, Any]) -> Any:
+        resp = self.client.post(url, json=body)
         resp.raise_for_status()
         return resp.json()
 

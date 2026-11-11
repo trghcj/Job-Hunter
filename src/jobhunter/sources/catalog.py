@@ -7,6 +7,9 @@ SOURCE_LABELS = {
     "greenhouse": "Greenhouse careers pages",
     "lever": "Lever careers pages",
     "ashby": "Ashby careers pages",
+    "workday": "Workday careers pages",
+    "smartrecruiters": "SmartRecruiters careers pages",
+    "amazon": "Amazon jobs",
     "remotive": "Remotive (remote)",
     "remoteok": "Remote OK (remote)",
 }

@@ -2,7 +2,7 @@
 
 A scheduled Python service that finds India-based jobs for your target titles once a day, filters them against your experience range and locations, and emails you a short digest of new matches. It runs in the cloud every morning at about 7:45 AM IST, so your laptop can stay off, and it runs entirely on free tiers.
 
-- **Sources:** Adzuna India, the public careers pages (Greenhouse, Lever, Ashby) of a 75-company watchlist of Indian tech companies and MNCs with India offices, and the Remotive and Remote OK remote feeds. Every source is a plug-in adapter; more are on the [roadmap](#roadmap).
+- **Sources:** Adzuna India, Amazon jobs, the careers sites (Greenhouse, Lever, Ashby, Workday, SmartRecruiters) of a 125-company watchlist of Indian tech companies and MNCs with India offices, and the Remotive and Remote OK remote feeds. Every source is a plug-in adapter; more are on the [roadmap](#roadmap).
 - **Settings in the app, not in files:** job titles, experience range, cities, work modes and the digest address are edited on a small password-protected web page and stored in PostgreSQL.
 - **Resilient:** a failing source never stops a run. You get a failure alert email, and a weekly "still alive" email, so silence never hides a broken pipeline.
 - **Cost:** ₹0 a month (GitHub Actions, Supabase, Resend, Render and Adzuna free tiers).
@@ -35,7 +35,7 @@ Each job is kept only if it passes all of these. A dropped job stores a readable
 | Exclude words | Whole-word match in title or description, for example `unpaid`. |
 | Location | India-based, or remote. Remote jobs saying "US only", "EU residents" and similar are dropped. Remote jobs that never mention India are kept with a small score penalty. |
 | Work mode and city | From your profile. Remote jobs skip the city check, and a job whose location names no city ("India") passes. Delhi covers Delhi NCR (Gurugram, Noida, Greater Noida, Faridabad, Ghaziabad); Mumbai covers Navi Mumbai and Thane. |
-| Experience | Senior/lead/manager titles and level titles (Engineer II, SDE 3, MTS-2, Intermediate) are dropped for searches under 3 years. Text such as "2+ years" or "1–3 yrs exp" is compared with your range. Jobs that state no experience are kept with a small penalty. |
+| Experience | Senior/Staff/Lead/Principal/Manager titles are dropped when your maximum is under 5 years. Level titles count as years: II/2/Intermediate ≈ 2, III/3 ≈ 4, IV/4 and above ≈ 6, and are dropped when above your maximum. Text such as "2+ years" or "1–3 yrs exp" is compared with your range. Jobs that state no experience are kept with a small penalty. |
 | Recency | Jobs older than your maximum age (default 14 days) are dropped. |
 
 Until embedding and LLM scoring arrive (Phase 4), the score is 1.0 minus 0.1 for unstated experience and minus 0.1 for remote roles that never mention India.
@@ -45,10 +45,15 @@ Until embedding and LLM scoring arrive (Phase 4), the score is 1.0 minus 0.1 for
 | Source | How it is read | Notes |
 |---|---|---|
 | Adzuna India | Official API with a free key | Descriptions are cut to about 500 characters |
-| Greenhouse, Lever, Ashby | Public careers-page APIs, no key | One request per company on the watchlist. Jobs are kept only if the title matches and the job is in India or remote-open-to-India; plain "Remote" on a global company's board is skipped because it is almost always US-only. One broken board is skipped; the source fails only if most boards fail. |
+| Greenhouse, Lever, Ashby | Public careers-page APIs, no key | One request per company on the watchlist. |
+| SmartRecruiters | Official public Posting API, no key | India postings only (`country=in`), for example Swiggy, Bosch, ServiceNow, Freshworks. |
+| Workday | The public JSON each Workday careers site loads, no login | Uses the site's own India filter so jobs come newest first, stops at jobs older than the age limit (at most 5 pages), for example Nvidia, Adobe, Salesforce, Intel, Cisco, Visa, Citi, Mastercard. |
+| Amazon | amazon.jobs search JSON, newest first | Up to 300 newest India jobs per run. |
 | Remotive, Remote OK | Public feeds, one call per run | Only roles open to India or worldwide. Links point back to the source, as their terms require. |
 
-The **company watchlist** (75 companies to start, from [data/company_watchlist.yaml](data/company_watchlist.yaml)) is edited on the settings page, one `Name | ats | slug` per line, where the slug is the company's name in its careers URL, for example `jobs.lever.co/cred`. Big companies that use other hiring systems (Workday, SmartRecruiters or their own portals, such as Google, Microsoft, Amazon, TCS and Infosys) are not covered by these three sites; Adzuna and job-alert emails (Phase 3) reach many of them.
+For the careers sites, a job is kept only if the title matches, it is in India or remote-open-to-India (plain "Remote" on a global company's board is skipped because it is almost always US-only), and the title is not too senior for your experience range. The description is fetched only after those checks, to keep requests few. One broken site is skipped; a source fails only if most of its sites fail.
+
+The **company watchlist** (125 companies, from [data/company_watchlist.yaml](data/company_watchlist.yaml)) is edited on the settings page, one `Name | ats | slug` per line. The slug is the company's name in its careers URL: `jobs.lever.co/cred` → `cred`; for Workday `tenant.wdN/Site`, for example `nvidia.wd5/NVIDIAExternalCareerSite`. When a new version of the default list ships, `migrate` adds only the new companies; your edits and removals are kept. Companies with their own portals and no public feed (Google, Microsoft, Flipkart, TCS, Infosys and others) are reached through Adzuna and job-alert emails.
 
 ### Rate limits
 
@@ -75,8 +80,9 @@ src/jobhunter/
   pipeline.py          fetch → normalize → dedupe → filter → digest
   usage.py             call budgets for rate-limited APIs
   user_settings.py     load and seed settings stored in the database
-  sources/             one adapter per source (adzuna, greenhouse, lever, ashby, remotive,
-                       remoteok), boards.py (shared careers-page logic), watchlist.py,
+  sources/             one adapter per source (adzuna, greenhouse, lever, ashby, workday,
+                       smartrecruiters, amazon, remotive, remoteok), boards.py (shared
+                       careers-site logic), watchlist.py,
                        registry.py (which sources run), catalog.py, base.py
   matching/filters.py  hard filters
   notify/              digest email (Resend), failure alerts, weekly heartbeat
@@ -178,7 +184,7 @@ Tests make no network calls: API responses are replayed from `tests/fixtures/`, 
 | 0 | Done | Project skeleton, settings, database migrations |
 | 1 | Done | Adzuna adapter, normalizer, filters, digest email, settings page on Render |
 | 2 | In progress | Daily GitHub Actions run, failure alerts, weekly heartbeat (waiting on the first scheduled run) |
-| 3 | In progress | Done: Greenhouse, Lever and Ashby careers pages from an editable company watchlist; Remotive and Remote OK. Next: LinkedIn, Naukri and Indeed alert emails read from Gmail |
+| 3 | In progress | Done: careers sites (Greenhouse, Lever, Ashby, Workday, SmartRecruiters) from an editable 125-company watchlist; Amazon; Remotive and Remote OK. Next: LinkedIn, Naukri and Indeed alert emails read from Gmail |
 | — | Planned | Chrome companion extension: reads the job cards you open on LinkedIn, Naukri or Indeed (no automatic browsing), highlights matches using the same filters, and saves jobs to JobHunter |
 | 4 | Planned | Embedding score from a profile, title and skill scores, optional LLM review with a no-LLM fallback |
 | 5 | Planned | Applied / Not interested / Save links in the email; rejections lower similar jobs |

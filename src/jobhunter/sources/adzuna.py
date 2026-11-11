@@ -69,7 +69,7 @@ class AdzunaAdapter:
         budget: CallBudget,
         client: httpx.Client | None = None,
         results_per_page: int = 50,
-        max_pages: int = 2,
+        max_pages: int = 1,  # newest 50 per title is plenty for a daily run
         max_days_old: int = 14,
         min_interval: float = 2.5,  # 25 calls/min
         sleep: Callable[[float], None] = time.sleep,
