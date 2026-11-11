@@ -1,7 +1,10 @@
 """Parse and validate the settings form. Pure functions: no web framework, no database."""
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from jobhunter.sources.catalog import SOURCE_LABELS
+from jobhunter.sources.watchlist import Company, parse_watchlist_text
 
 WORK_MODES = ("onsite", "hybrid", "remote")
 MAX_TITLES = 50
@@ -21,6 +24,8 @@ class ProfileForm:
     digest_to: list[str]
     max_jobs: int
     max_age_days: int
+    sources: dict[str, bool] = field(default_factory=lambda: dict.fromkeys(SOURCE_LABELS, True))
+    watchlist: list[Company] = field(default_factory=list)
 
 
 def parse_lines(text: str | None, commas: bool = False) -> list[str]:
@@ -47,9 +52,21 @@ def _int(fields: dict[str, str], name: str, label: str, lo: int, hi: int,
     return value
 
 
-def parse_form(fields: dict[str, str], work_modes: list[str]) -> tuple[ProfileForm, list[str]]:
-    """Returns the parsed form (always, so it can be re-shown) and a list of errors."""
+def parse_form(
+    fields: dict[str, str], work_modes: list[str], sources: list[str] | None = None
+) -> tuple[ProfileForm, list[str]]:
+    """Returns the parsed form (always, so it can be re-shown) and a list of errors.
+    `sources` is the list of ticked source boxes; None means the form had no such section."""
     errors: list[str] = []
+
+    if sources is None:
+        enabled = dict.fromkeys(SOURCE_LABELS, True)
+    else:
+        enabled = {name: name in sources for name in SOURCE_LABELS}
+        if not any(enabled.values()):
+            errors.append("Pick at least one job source.")
+    watchlist, watchlist_errors = parse_watchlist_text(fields.get("watchlist"))
+    errors += watchlist_errors
 
     titles = parse_lines(fields.get("titles"), commas=True)
     if len(titles) > MAX_TITLES:
@@ -83,5 +100,7 @@ def parse_form(fields: dict[str, str], work_modes: list[str]) -> tuple[ProfileFo
         digest_to=digest_to,
         max_jobs=_int(fields, "max_jobs", "Jobs per email", 1, 100, errors),
         max_age_days=_int(fields, "max_age_days", "Maximum job age", 1, 60, errors),
+        sources=enabled,
+        watchlist=watchlist,
     )
     return form, errors

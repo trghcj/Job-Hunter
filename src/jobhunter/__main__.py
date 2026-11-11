@@ -176,6 +176,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     from jobhunter.pipeline import DEFAULT_MAX_JOBS, run_pipeline
     from jobhunter.settings import get_settings
     from jobhunter.sources.registry import build_adapters
+    from jobhunter.sources.watchlist import companies_from_setting
     from jobhunter.user_settings import get_setting
 
     now = datetime.now(UTC)
@@ -190,7 +191,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         sources = get_setting(session, "sources", {}) or {}
         digest_cfg = get_setting(session, "digest", {}) or {}
         max_age = int(get_setting(session, "max_age_days", 14))
-        adapters = build_adapters(session, get_settings(), sources)
+        watchlist = companies_from_setting(get_setting(session, "company_watchlist", []))
+        adapters = build_adapters(session, get_settings(), sources, watchlist)
         if not adapters:
             problems.append("no job sources are enabled or configured")
         summary = run_pipeline(

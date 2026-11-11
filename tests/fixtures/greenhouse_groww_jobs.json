@@ -1,0 +1,172 @@
+{
+ "jobs": [
+  {
+   "absolute_url": "https://job-boards.eu.greenhouse.io/groww/jobs/4970739101",
+   "data_compliance": [
+    {
+     "type": "gdpr",
+     "requires_consent": false,
+     "requires_processing_consent": false,
+     "requires_retention_consent": false,
+     "retention_period": null,
+     "demographic_data_consent_applies": false
+    }
+   ],
+   "internal_job_id": 4520058101,
+   "location": {
+    "name": "Bengaluru-VTP, India"
+   },
+   "metadata": [
+    {
+     "id": 9193480101,
+     "name": "Designation",
+     "value": "Assistant Manager",
+     "value_type": "short_text"
+    }
+   ],
+   "id": 4970739101,
+   "updated_at": "2026-09-14T03:52:53-04:00",
+   "requisition_id": "GRID-17832",
+   "title": "Assistant Manager - Internal Audit",
+   "company_name": "Groww",
+   "first_published": "2026-09-14T03:49:28-04:00",
+   "language": "en",
+   "application_deadline": null
+  },
+  {
+   "absolute_url": "https://job-boards.eu.greenhouse.io/groww/jobs/4880153101",
+   "data_compliance": [
+    {
+     "type": "gdpr",
+     "requires_consent": false,
+     "requires_processing_consent": false,
+     "requires_retention_consent": false,
+     "retention_period": null,
+     "demographic_data_consent_applies": false
+    }
+   ],
+   "internal_job_id": 4477650101,
+   "location": {
+    "name": "Bengaluru-VTP, India"
+   },
+   "metadata": [
+    {
+     "id": 9193480101,
+     "name": "Designation",
+     "value": "Associate",
+     "value_type": "short_text"
+    }
+   ],
+   "id": 4880153101,
+   "updated_at": "2026-08-27T07:35:34-04:00",
+   "requisition_id": "GRID-17155",
+   "title": "Associate - Content (Digest)",
+   "company_name": "Groww",
+   "first_published": "2026-06-03T02:46:08-04:00",
+   "language": "en",
+   "application_deadline": null
+  },
+  {
+   "absolute_url": "https://job-boards.eu.greenhouse.io/groww/jobs/4979964101",
+   "data_compliance": [
+    {
+     "type": "gdpr",
+     "requires_consent": false,
+     "requires_processing_consent": false,
+     "requires_retention_consent": false,
+     "retention_period": null,
+     "demographic_data_consent_applies": false
+    }
+   ],
+   "internal_job_id": 4523869101,
+   "location": {
+    "name": "Bengaluru-VTP, India"
+   },
+   "metadata": [
+    {
+     "id": 9193480101,
+     "name": "Designation",
+     "value": "Senior Associate",
+     "value_type": "short_text"
+    }
+   ],
+   "id": 4979964101,
+   "updated_at": "2026-10-08T02:42:18-04:00",
+   "requisition_id": "GRID-17853",
+   "title": "Creative Illustrator ",
+   "company_name": "Groww",
+   "first_published": "2026-10-08T02:22:36-04:00",
+   "language": "en",
+   "application_deadline": null
+  },
+  {
+   "absolute_url": "https://job-boards.eu.greenhouse.io/groww/jobs/5000706101",
+   "data_compliance": [
+    {
+     "type": "gdpr",
+     "requires_consent": false,
+     "requires_processing_consent": false,
+     "requires_retention_consent": false,
+     "retention_period": null,
+     "demographic_data_consent_applies": false
+    }
+   ],
+   "internal_job_id": 4533181101,
+   "location": {
+    "name": "Bengaluru, India"
+   },
+   "metadata": [
+    {
+     "id": 9193480101,
+     "name": "Designation",
+     "value": "Finance Content Creator",
+     "value_type": "short_text"
+    }
+   ],
+   "id": 5000706101,
+   "updated_at": "2026-10-09T03:18:37-04:00",
+   "requisition_id": "GRID-17916",
+   "title": "Finance Content Creator",
+   "company_name": "Groww",
+   "first_published": "2026-10-09T03:18:37-04:00",
+   "language": "en",
+   "application_deadline": null
+  },
+  {
+   "absolute_url": "https://job-boards.eu.greenhouse.io/groww/jobs/5000618101",
+   "data_compliance": [
+    {
+     "type": "gdpr",
+     "requires_consent": false,
+     "requires_processing_consent": false,
+     "requires_retention_consent": false,
+     "retention_period": null,
+     "demographic_data_consent_applies": false
+    }
+   ],
+   "internal_job_id": 4533129101,
+   "location": {
+    "name": "Bengaluru-VTP, India"
+   },
+   "metadata": [
+    {
+     "id": 9193480101,
+     "name": "Designation",
+     "value": "Manager-1",
+     "value_type": "short_text"
+    }
+   ],
+   "id": 5000618101,
+   "updated_at": "2026-10-12T01:47:03-04:00",
+   "requisition_id": "GRID-17914",
+   "title": "Manager - Compliance (PMS)",
+   "company_name": "Groww",
+   "first_published": "2026-10-12T01:47:03-04:00",
+   "language": "en",
+   "application_deadline": null
+  }
+ ],
+ "meta": {
+  "total": 9
+ }
+}

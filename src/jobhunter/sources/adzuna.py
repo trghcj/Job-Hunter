@@ -5,18 +5,16 @@ CallBudget first; the adapter stops quietly when the budget says no.
 Errors never include the request URL, because the URL carries the API key.
 """
 
-import html
 import logging
-import re
 import time
 from collections.abc import Callable, Iterator
-from datetime import datetime
 from typing import Any
 
 import httpx
 
 from jobhunter.models import RawJob
 from jobhunter.sources.base import Search
+from jobhunter.sources.text import clean_html, parse_datetime
 from jobhunter.usage import CallBudget, Limits
 
 log = logging.getLogger(__name__)
@@ -30,10 +28,6 @@ SEARCH_URL = "https://api.adzuna.com/v1/api/jobs/in/search/{page}"
 
 class AdzunaError(RuntimeError):
     """Adzuna call failed. Message is safe to log and store (no key, no URL)."""
-
-
-def _clean_html(text: str | None) -> str:
-    return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", text or "")).split())
 
 
 def _lakh(value: float) -> str:
@@ -51,23 +45,16 @@ def _salary_text(r: dict[str, Any]) -> str | None:
     return None
 
 
-def _parse_date(value: str | None) -> datetime | None:
-    try:
-        return datetime.fromisoformat(value) if value else None
-    except ValueError:
-        return None
-
-
 def parse_result(r: dict[str, Any]) -> RawJob:
     return RawJob(
         source=PROVIDER,
         source_job_id=str(r["id"]) if r.get("id") is not None else None,
         url=r.get("redirect_url", ""),
-        title=_clean_html(r.get("title")),
-        company=_clean_html((r.get("company") or {}).get("display_name")) or "Unknown",
+        title=clean_html(r.get("title")),
+        company=clean_html((r.get("company") or {}).get("display_name")) or "Unknown",
         location_text=(r.get("location") or {}).get("display_name"),
-        description=_clean_html(r.get("description")) or None,
-        posted_at=_parse_date(r.get("created")),
+        description=clean_html(r.get("description")) or None,
+        posted_at=parse_datetime(r.get("created")),
         salary_text=_salary_text(r),
     )
 

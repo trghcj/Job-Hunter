@@ -66,6 +66,20 @@
     </div>
   </div>
 
+  <div class="card">
+    <h2>Where to look</h2>
+    <input type="hidden" name="sources_section" value="1">
+    <label>Job sources</label>
+    <div class="checks">
+      {% for key, label in source_labels.items() %}
+      <label><input type="checkbox" name="sources" value="{{ key }}" {% if form.sources.get(key) %}checked{% endif %}> {{ label }}</label>
+      {% endfor %}
+    </div>
+
+    <label for="watchlist">Company watchlist <span class="hint">{{ form.watchlist | length }} companies. One per line: <code>Name | ats | slug</code>, where ats is greenhouse, lever or ashby and slug is the company's name in its careers URL (jobs.lever.co/<b>cred</b>, boards.greenhouse.io/<b>groww</b>, jobs.ashbyhq.com/<b>atlan</b>).</span></label>
+    <textarea id="watchlist" name="watchlist" rows="10" spellcheck="false" placeholder="Groww | greenhouse | groww">{{ watchlist_text }}</textarea>
+  </div>
+
   <p><button type="submit">Save settings</button></p>
 </form>
 

@@ -17,6 +17,8 @@ from sqlalchemy.orm import sessionmaker
 from starlette.middleware.sessions import SessionMiddleware
 
 from jobhunter.settings import Settings, get_settings
+from jobhunter.sources.catalog import SOURCE_LABELS
+from jobhunter.sources.watchlist import format_watchlist
 from jobhunter.web.forms import WORK_MODES, parse_form
 from jobhunter.web.store import DbSettingsStore, SettingsStore
 
@@ -115,13 +117,18 @@ def create_app(
             request.session.clear()
         return _see_other("/login")
 
-    def render_settings(request: Request, form, errors=(), saved=False, status=200):
+    def render_settings(request: Request, form, errors=(), saved=False, status=200,
+                        watchlist_text: str | None = None):
         ctx = {
             "csrf": _csrf(request),
             "form": form,
             "errors": list(errors),
             "saved": saved,
             "modes": WORK_MODES,
+            "source_labels": SOURCE_LABELS,
+            "watchlist_text": (
+                watchlist_text if watchlist_text is not None else format_watchlist(form.watchlist)
+            ),
             "runs": store.recent_runs(),
         }
         return TEMPLATES.TemplateResponse(request, "settings.html", ctx, status_code=status)
@@ -142,9 +149,11 @@ def create_app(
             return Response("Form expired, reload the page.", status_code=403)
         fields = {k: str(v) for k, v in data.items() if isinstance(v, str)}
         modes = [str(m) for m in data.getlist("work_modes")]
-        form, errors = parse_form(fields, modes)
+        sources = [str(s) for s in data.getlist("sources")] if "sources_section" in data else None
+        form, errors = parse_form(fields, modes, sources)
         if errors:
-            return render_settings(request, form, errors, status=400)
+            return render_settings(request, form, errors, status=400,
+                                   watchlist_text=fields.get("watchlist", ""))
         store.save(form)
         return _see_other("/?saved=1")
 

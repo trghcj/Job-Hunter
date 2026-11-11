@@ -20,6 +20,8 @@ CITY_ALIASES: dict[str, list[str]] = {
     "Gurugram": ["gurugram", "gurgaon"],
     "Noida": ["noida"],
     "Greater Noida": ["greater noida"],
+    "Faridabad": ["faridabad"],
+    "Ghaziabad": ["ghaziabad"],
     "Hyderabad": ["hyderabad", "secunderabad"],
     "Chennai": ["chennai", "madras"],
     "Pune": ["pune"],

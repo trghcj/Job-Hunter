@@ -76,6 +76,29 @@ def test_too_long_title_rejected():
     assert any("title" in e.lower() for e in errors)
 
 
+def test_sources_and_watchlist():
+    form, errors = parse_form(
+        fields(watchlist="Groww | greenhouse | groww\nCRED | lever | cred"),
+        ["remote"],
+        sources=["greenhouse", "lever", "not-a-source"],
+    )
+    assert errors == []
+    assert form.sources["greenhouse"] and form.sources["lever"]
+    assert not form.sources["adzuna"] and "not-a-source" not in form.sources
+    assert [c.slug for c in form.watchlist] == ["groww", "cred"]
+
+
+def test_no_sources_rejected_and_bad_watchlist_line_reported():
+    _, errors = parse_form(fields(watchlist="Groww | workday | groww"), ["remote"], sources=[])
+    assert any("source" in e.lower() for e in errors)
+    assert any("Watchlist line 1" in e for e in errors)
+
+
+def test_sources_default_to_all_on_when_not_submitted():
+    form, _ = parse_form(fields(), ["remote"])
+    assert all(form.sources.values())
+
+
 def test_empty_titles_allowed_but_warned_elsewhere():
     form, errors = parse_form(fields(titles=""), ["remote"])
     assert errors == [] and form.titles == []

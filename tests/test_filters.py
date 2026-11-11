@@ -234,6 +234,25 @@ def test_apply_filters_drops(kwargs, search_overrides, reason_part):
     assert reason_part in result.reason
 
 
+@pytest.mark.parametrize(
+    ("location", "cities"),
+    [
+        ("Gurugram, Haryana", ["Delhi"]),
+        ("Noida, Uttar Pradesh", ["Bengaluru", "Delhi"]),
+        ("Faridabad", ["Delhi NCR"]),
+        ("Navi Mumbai", ["Mumbai"]),
+        ("India", ["Pune"]),  # no city named: open anywhere in India
+    ],
+)
+def test_city_regions_and_unnamed_city_pass(location, cities):
+    assert apply_filters(job(location=location), search(cities=cities), now=NOW).passed
+
+
+def test_region_does_not_leak_other_cities():
+    result = apply_filters(job(location="Pune"), search(cities=["Delhi"]), now=NOW)
+    assert not result.passed and "city Pune" in result.reason
+
+
 def test_city_filter_does_not_drop_remote_jobs():
     result = apply_filters(job(location="Remote, India"), search(cities=["Pune"]), now=NOW)
     assert result.passed

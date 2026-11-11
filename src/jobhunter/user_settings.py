@@ -66,6 +66,21 @@ def seed_defaults(session: Session, path: Path = DEFAULT_CONFIG) -> None:
         stmt = insert(AppSetting).values(key=key, value=value).on_conflict_do_nothing()
         session.execute(stmt)
     session.commit()
+    seed_watchlist(session)
+
+
+def seed_watchlist(session: Session) -> None:
+    """Fill an empty company watchlist from data/company_watchlist.yaml, once ever, so a
+    list you clear on purpose stays cleared."""
+    from jobhunter.sources.watchlist import companies_to_setting, load_default_watchlist
+
+    if get_setting(session, "watchlist_seeded"):
+        return
+    if not get_setting(session, "company_watchlist"):
+        companies = load_default_watchlist()
+        set_setting(session, "company_watchlist", companies_to_setting(companies))
+        log.info("Seeded company watchlist with %d companies", len(companies))
+    set_setting(session, "watchlist_seeded", True)
 
 
 def profile_to_search(row: SearchProfile) -> Search:

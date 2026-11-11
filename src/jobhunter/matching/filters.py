@@ -186,8 +186,22 @@ class FilterResult:
     remote_unconfirmed: bool = False  # remote, never mentions India: small penalty later
 
 
+# Typing the main city of a metro region also accepts its satellite cities.
+CITY_REGIONS = {
+    "Delhi": {"Delhi", "Gurugram", "Noida", "Greater Noida", "Faridabad", "Ghaziabad"},
+    "Mumbai": {"Mumbai", "Navi Mumbai", "Thane"},
+    "Hyderabad": {"Hyderabad"},
+    "Chandigarh": {"Chandigarh", "Mohali"},
+}
+
+
 def _wanted_cities(cities: list[str]) -> set[str]:
-    return {detect_city(c) or c.strip().title() for c in cities if c.strip()}
+    wanted: set[str] = set()
+    for c in cities:
+        if c.strip():
+            city = detect_city(c) or c.strip().title()
+            wanted |= CITY_REGIONS.get(city, {city})
+    return wanted
 
 
 def apply_filters(
@@ -216,8 +230,9 @@ def apply_filters(
         return FilterResult(False, f"work mode {job.work_mode} not wanted", score)
 
     cities = _wanted_cities(search.cities)
-    if cities and job.work_mode != "remote" and job.city not in cities:
-        return FilterResult(False, f"city {job.city or 'unknown'} not in your cities", score)
+    # A job naming no city (location just "India") is treated as open anywhere in India.
+    if cities and job.work_mode != "remote" and job.city and job.city not in cities:
+        return FilterResult(False, f"city {job.city} not in your cities", score)
 
     ok, reason, unstated = check_experience(
         raw.title, raw.description, search.min_years, search.max_years

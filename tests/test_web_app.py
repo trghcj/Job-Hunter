@@ -131,6 +131,28 @@ def test_invalid_settings_not_saved_and_shown_back(client, store):
     assert store.saves == 0
 
 
+def test_save_sources_and_watchlist(client, store):
+    token = login(client)
+    data = valid_form(token, sources_section="1", sources=["greenhouse", "remotive"],
+                      watchlist="Groww | greenhouse | groww\nCRED | lever | cred")
+    r = client.post("/", data=data, follow_redirects=False)
+    assert r.status_code == 303
+    assert store.form.sources["greenhouse"] and store.form.sources["remotive"]
+    assert not store.form.sources["adzuna"]
+    assert [c.slug for c in store.form.watchlist] == ["groww", "cred"]
+    page = client.get("/").text
+    assert "CRED | lever | cred" in page and "2 companies" in page
+
+
+def test_bad_watchlist_keeps_what_you_typed(client, store):
+    token = login(client)
+    data = valid_form(token, sources_section="1", sources=["lever"],
+                      watchlist="Groww | workday | groww")
+    r = client.post("/", data=data)
+    assert r.status_code == 400 and "Watchlist line 1" in r.text
+    assert "Groww | workday | groww" in r.text and store.saves == 0
+
+
 def test_save_without_csrf_rejected(client, store):
     login(client)
     r = client.post("/", data=valid_form("forged"))

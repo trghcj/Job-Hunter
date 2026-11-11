@@ -8,6 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from jobhunter.db import Run, SearchProfile
+from jobhunter.sources.catalog import SOURCE_LABELS, is_enabled
+from jobhunter.sources.watchlist import companies_from_setting, companies_to_setting
 from jobhunter.user_settings import BUILTIN_PROFILE, get_setting, seed_defaults, set_setting
 from jobhunter.web.forms import ProfileForm
 
@@ -50,7 +52,10 @@ class DbSettingsStore:
             assert profile is not None
             digest = get_setting(session, "digest", {}) or {}
             to = get_setting(session, "digest_to", []) or []
+            sources = get_setting(session, "sources", {}) or {}
             return ProfileForm(
+                sources={name: is_enabled(sources, name) for name in SOURCE_LABELS},
+                watchlist=companies_from_setting(get_setting(session, "company_watchlist", [])),
                 titles=list(profile.titles or []),
                 cities=list(profile.cities or []),
                 work_modes=list(profile.work_modes or BUILTIN_PROFILE["work_modes"]),
@@ -82,6 +87,12 @@ class DbSettingsStore:
             set_setting(session, "digest", digest)
             set_setting(session, "digest_to", form.digest_to)
             set_setting(session, "max_age_days", form.max_age_days)
+
+            sources = dict(get_setting(session, "sources", {}) or {})  # keeps unknown keys
+            for name, on in form.sources.items():
+                sources[name] = {**(sources.get(name) or {}), "enabled": on}
+            set_setting(session, "sources", sources)
+            set_setting(session, "company_watchlist", companies_to_setting(form.watchlist))
 
     def recent_runs(self, limit: int = 8) -> list[RunRow]:
         with self._sessions() as session:
