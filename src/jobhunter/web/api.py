@@ -22,7 +22,9 @@ from jobhunter.db import Job, JobScore, JobStatus, User
 from jobhunter.extension_tokens import hash_token, user_for_token
 from jobhunter.models import RawJob
 from jobhunter.normalize import normalize_job
-from jobhunter.pipeline import best_result, upsert_jobs, visible_to
+from jobhunter.matching.fit import local_fit
+from jobhunter.pipeline import best_result, job_skill_columns, upsert_jobs, visible_to
+from jobhunter.profile import load_profile
 from jobhunter.user_settings import get_user_setting, load_active_searches
 from jobhunter.web.jobs_store import JobCard, JobsStore
 
@@ -81,6 +83,7 @@ class CheckResult:
     verdict: Literal["match", "no_match"]
     reasons: list[str]
     seen: Seen
+    fit: dict | None = None  # {level, score, reason} for a match, once the user has a profile
 
 
 class ApiGateway(Protocol):
@@ -148,9 +151,25 @@ class DbApi:
             max_age = int(get_user_setting(session, user_id, "max_age_days",
                                            DEFAULT_MAX_AGE_DAYS))
             result = best_result(job, searches, datetime.now(UTC), max_age)
+            fit = self._fit(session, user_id, job, result) if result.passed else None
         if result.passed:
-            return CheckResult("match", [], seen)
+            return CheckResult("match", [], seen, fit)
         return CheckResult("no_match", [result.reason] if result.reason else [], seen)
+
+    def _fit(self, session: Session, user_id: int, job, result) -> dict | None:
+        profile = load_profile(session, user_id)
+        if profile is None:
+            return None
+        stored = session.execute(select(Job.skills, Job.title_skills).where(
+            Job.dedupe_key == job.dedupe_key, visible_to(user_id))).first()
+        if stored and stored.skills is not None:
+            skills, title_skills = stored.skills, stored.title_skills or []
+        else:  # not fetched by JobHunter yet: read the page's own text
+            cols = job_skill_columns(job.raw.title, job.raw.description)
+            skills, title_skills = cols["skills"], cols["title_skills"]
+        fit = local_fit(set(skills), set(title_skills), set(profile.skills), result.title_score,
+                        result.experience_unstated, result.remote_unconfirmed)
+        return {"level": fit.level, "score": fit.score, "reason": fit.reason}
 
     def save(self, user_id: int, req: SaveRequest) -> int:
         job = normalize_job(_raw_job(req))
