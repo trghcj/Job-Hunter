@@ -35,8 +35,10 @@
   function placeText(place) {
     const a = (place && place.address) || {};
     if (typeof a === "string") return a;
-    const parts = [a.addressLocality, a.addressRegion, nameOf(a.addressCountry)]
-      .map((p) => (p || "").trim()).filter(Boolean);
+    // Some sites (Naukri) give lists of places and "-" for an empty value.
+    const parts = [a.addressLocality, a.addressRegion, a.addressCountry]
+      .flatMap((v) => [].concat(v || [])).map((v) => nameOf(v).trim())
+      .filter((v) => v && v !== "-");
     return parts.filter((p, i) => parts.indexOf(p) === i).join(", ");
   }
 

@@ -7,7 +7,8 @@ const { parseHTML } = require("linkedom");
 
 const DROP_TAGS = "script,style,svg,img,picture,iframe,noscript,link,meta,button,input,template,video,source,form";
 const KEEP_ATTRS = new Set(["href", "data-testid", "aria-label", "role", "data-jk", "id"]);
-const KEEP_CLASSES = new Set(["simple-job-description-html", "jcs-JobTitle"]);
+// Class names the readers use (Naukri adds a build hash after them: styles_jd-header-title__x).
+const KEEP_CLASSES = /^(simple-job-description-html|jcs-JobTitle|styles_(jd-header-title|jd-header-comp-name|jhc__location|JDC__dang-inner-html)__\w+)$/;
 const KEEP_PARAMS = new Set(["currentJobId", "jk", "vjk", "fromjk"]);
 // Blocks about the signed-in person (their network, school, resume match) or upsells.
 const PERSONAL = /people you can reach out|school alumni|connections? work|your profile and|resume|match score|match details|information helpful|top applicant|hiring insights|premium|set alert for similar|meet the hiring team/i;
@@ -30,7 +31,7 @@ function scrub(root) {
   for (const el of [root, ...root.querySelectorAll("*")]) {
     for (const { name, value } of [...el.attributes]) {
       if (name === "class") {
-        const kept = value.split(/\s+/).filter((c) => KEEP_CLASSES.has(c));
+        const kept = value.split(/\s+/).filter((c) => KEEP_CLASSES.test(c));
         if (kept.length) el.setAttribute("class", kept.join(" "));
         else el.removeAttribute("class");
       } else if (!KEEP_ATTRS.has(name)) {
@@ -90,8 +91,16 @@ function indeedRoot(document) {
 function naukriRoot(document) {
   const jsonld = [...document.querySelectorAll('script[type="application/ld+json"]')]
     .filter((s) => /JobPosting/.test(s.textContent));
-  const root = document.querySelector("main") || document.body;
-  return { root, keep: [], jsonld };
+  const title = document.querySelector('h1[class*="jd-header-title"]');
+  if (title) {
+    const description = document.querySelector('[class*="dang-inner-html"]');
+    const root = climb(title, (el) => el.contains(description));
+    return { root, keep: [title, description], jsonld };
+  }
+  // A search results page: keep the list of job cards.
+  const cards = 'a[href*="/job-listings-"]';
+  const root = climb(document.querySelector(cards), (el) => el.querySelectorAll(cards).length > 2);
+  return { root, keep: [...root.querySelectorAll(cards)], jsonld };
 }
 
 function main([site, input, output]) {

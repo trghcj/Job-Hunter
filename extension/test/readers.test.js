@@ -7,7 +7,7 @@ const { parseHTML, DOMParser } = require("linkedom");
 
 globalThis.DOMParser = DOMParser;
 globalThis.JH = {};
-for (const f of ["common", "jsonld", "linkedin", "indeed", "index"]) require(`../readers/${f}.js`);
+for (const f of ["common", "jsonld", "linkedin", "naukri", "indeed", "index"]) require(`../readers/${f}.js`);
 const JH = globalThis.JH;
 
 const FIXTURES = path.join(__dirname, "fixtures");
@@ -178,6 +178,43 @@ test("indeed viewjob page uses JSON-LD first", () => {
 test("indeed home with no job open", () => {
   const { document } = parseHTML("<html><body><h1>Jobs for you</h1></body></html>");
   assert.equal(JH.readJob(document, new URL("https://in.indeed.com/")), null);
+});
+
+// --- Naukri ---
+
+const NAUKRI_URL = "https://www.naukri.com/job-listings-software-engineer-software-developer-" +
+  "netm-corporate-solutions-hyderabad-bengaluru-india-0-to-5-years-111126028176";
+
+test("naukri job page", () => {
+  const job = JH.readJob(...page("naukri_job.html", `${NAUKRI_URL}?src=jobsearchDesk&sid=1&xp=1`));
+  assert.deepEqual({ ...job, description: undefined }, { url: NAUKRI_URL,
+    title: "Software Engineer / Software Developer", company: "Netm Corporate Solutions",
+    location: "Bengaluru, Hyderabad, India", description: undefined });
+  assert.ok(job.description.startsWith("NetM Corporate Solutions Pvt. Ltd. is hiring"));
+});
+
+test("naukri job page without JSON-LD reads the page", () => {
+  const [document, location] = page("naukri_job.html", NAUKRI_URL);
+  for (const s of document.querySelectorAll('script[type="application/ld+json"]')) s.remove();
+  const job = JH.readJob(document, location);
+  assert.equal(job.title, "Software Engineer / Software Developer");
+  assert.equal(job.company, "NetM Corporate Solutions");
+  assert.equal(job.location, "Bengaluru, Hyderabad, India");
+  assert.ok(job.description.startsWith("NetM Corporate Solutions Pvt. Ltd. is hiring"));
+});
+
+test("test_naukri_search_is_not_a_job", () => {
+  assert.equal(JH.readJob(...page("naukri_search.html",
+    "https://www.naukri.com/software-developer-jobs?k=software%20developer")), null);
+});
+
+test("JSON-LD address given as lists with '-' placeholders", () => {
+  const html = `<script type="application/ld+json">${JSON.stringify({
+    "@type": "JobPosting", title: "QA", hiringOrganization: { name: "Q" },
+    jobLocation: { address: { addressLocality: ["Pune", "Mumbai"], addressRegion: ["Pune", "-"],
+      addressCountry: "-" } } })}</script>`;
+  const { document } = parseHTML(html);
+  assert.equal(JH.readJsonLd(document, new URL("https://jobs.lever.co/q/1")).location, "Pune, Mumbai");
 });
 
 // --- Fixtures ---
