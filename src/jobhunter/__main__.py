@@ -166,7 +166,13 @@ def _maybe_heartbeat(session: Session, now: datetime, force: bool = False) -> bo
     return True
 
 
-def cmd_run(_: argparse.Namespace) -> int:
+def _ran_today(session: Session, now: datetime) -> bool:
+    from jobhunter.pipeline import ran_successfully_today
+
+    return ran_successfully_today(session, now)
+
+
+def cmd_run(args: argparse.Namespace) -> int:
     from jobhunter.pipeline import DEFAULT_MAX_JOBS, run_pipeline
     from jobhunter.settings import get_settings
     from jobhunter.sources.registry import build_adapters
@@ -177,6 +183,10 @@ def cmd_run(_: argparse.Namespace) -> int:
     session: Session | None = None
     try:
         session = _session()
+        if getattr(args, "once_per_day", False) and _ran_today(session, now):
+            print("already ran successfully today (IST); skipping this backup run")
+            session.close()
+            return 0
         sources = get_setting(session, "sources", {}) or {}
         digest_cfg = get_setting(session, "digest", {}) or {}
         max_age = int(get_setting(session, "max_age_days", 14))
@@ -291,7 +301,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="jobhunter")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("migrate", help="apply database migrations").set_defaults(func=cmd_migrate)
-    sub.add_parser("run", help="fetch, filter and build the digest").set_defaults(func=cmd_run)
+    run = sub.add_parser("run", help="fetch, filter and email the digest")
+    run.add_argument(
+        "--once-per-day", action="store_true",
+        help="skip if a run already succeeded today (IST); used by backup schedule times",
+    )
+    run.set_defaults(func=cmd_run)
     titles = sub.add_parser("set-titles", help="set job titles (until the settings page)")
     titles.add_argument("titles", nargs="+")
     titles.set_defaults(func=cmd_set_titles)

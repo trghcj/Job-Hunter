@@ -7,7 +7,7 @@ one row in `runs`; a failing source never stops the others.
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 from sqlalchemy import literal_column, select
 from sqlalchemy.dialects.postgresql import insert
@@ -246,6 +246,30 @@ def mark_emailed(session: Session, job_ids: Sequence[int], now: datetime) -> Non
         set_={"emailed_at": ins.excluded.emailed_at, "updated_at": ins.excluded.updated_at},
     ))
     session.commit()
+
+
+# ------------------------------------------------------------------ once per day
+
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def ist_day_start(now: datetime) -> datetime:
+    """Midnight IST of `now`'s IST date, as a UTC datetime."""
+    local = now.astimezone(IST)
+    midnight = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    return midnight.astimezone(UTC)
+
+
+def ran_successfully_today(session: Session, now: datetime) -> bool:
+    """True if a run already finished its email step without error today (IST).
+    Backup schedule times use this so you never get two digests in a day."""
+    stmt = select(Run.id).where(
+        Run.source == "email",
+        Run.ok.is_(True),
+        Run.started_at >= ist_day_start(now),
+        Run.started_at < ist_day_start(now) + timedelta(days=1),
+    )
+    return session.scalars(stmt.limit(1)).first() is not None
 
 
 # ------------------------------------------------------------------ whole run

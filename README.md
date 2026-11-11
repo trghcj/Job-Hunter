@@ -1,6 +1,6 @@
 # JobHunter
 
-A scheduled Python service that finds India-based jobs for your target titles once a day, filters them against your experience range and locations, and emails you a short digest of new matches. It runs in the cloud every morning at 7:30 AM IST, so your laptop can stay off, and it runs entirely on free tiers.
+A scheduled Python service that finds India-based jobs for your target titles once a day, filters them against your experience range and locations, and emails you a short digest of new matches. It runs in the cloud every morning at about 7:45 AM IST, so your laptop can stay off, and it runs entirely on free tiers.
 
 - **Sources:** Adzuna India today. Every source is a plug-in adapter, and more are on the [roadmap](#roadmap).
 - **Settings in the app, not in files:** job titles, experience range, cities, work modes and the digest address are edited on a small password-protected web page and stored in PostgreSQL.
@@ -10,8 +10,8 @@ A scheduled Python service that finds India-based jobs for your target titles on
 ## How it works
 
 ```
-GitHub Actions (daily, 02:00 UTC = 7:30 IST)
-   └─ python -m jobhunter run
+GitHub Actions (daily 7:43 IST, backups 9:13 and 11:43 IST)
+   └─ python -m jobhunter run --once-per-day
         1. read search profiles + settings ........ PostgreSQL (Supabase)
         2. fetch from each enabled source ......... Adzuna India API
         3. normalize: city, work mode, country, dedupe key
@@ -117,7 +117,7 @@ Running `run` twice sends the digest once; the second run reports `no new jobs, 
 | Command | What it does |
 |---|---|
 | `migrate` | Applies Alembic migrations and seeds missing default settings. Safe to repeat. |
-| `run` | One full cycle. Exits with code 1 and emails an alert if anything went wrong. |
+| `run` | One full cycle. Exits with code 1 and emails an alert if anything went wrong. With `--once-per-day` it does nothing if a run already succeeded today (IST). |
 | `set-titles TITLE...` | Sets the job titles (the settings page does the same). |
 | `set-email ADDRESS...` | Sets the digest recipients. |
 | `test-email` | Sends a one-job sample digest. |
@@ -138,7 +138,7 @@ Security: a single password compared in constant time, a 1-second delay after a 
 
 ## Deployment
 
-**Daily run (GitHub Actions).** Add these repository secrets under *Settings → Secrets and variables → Actions*: `DATABASE_URL`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `RESEND_API_KEY` and optionally `ALERT_TO`. The workflow in [.github/workflows/run.yml](.github/workflows/run.yml) runs at 02:00 UTC every day, and the **Run workflow** button on the Actions tab runs it by hand. GitHub can start scheduled runs several minutes late, so expect the email between 7:30 and 8:00 AM IST.
+**Daily run (GitHub Actions).** Add these repository secrets under *Settings → Secrets and variables → Actions*: `DATABASE_URL`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `RESEND_API_KEY` and optionally `ALERT_TO`. The workflow in [.github/workflows/run.yml](.github/workflows/run.yml) is scheduled at 7:43 AM IST, with backups at 9:13 and 11:43 AM IST. GitHub can delay scheduled runs, and at busy times (especially the top of the hour) it can drop them, so the main time is off the hour and every scheduled run uses `--once-per-day`: a backup only works if no run has succeeded yet that day, so you never get two digests. The **Run workflow** button on the Actions tab always runs.
 
 **Settings page (Render).** In the Render dashboard choose **New → Blueprint**, pick this repository, and enter `DATABASE_URL` and `WEB_PASSWORD` when asked; Render generates `SESSION_SECRET`. [render.yaml](render.yaml) deploys a free web service in Singapore and redeploys on every push to `main`. Free services sleep when idle, so the first visit after a break takes up to a minute. The daily run does not depend on the page.
 

@@ -2,8 +2,13 @@ name: Daily job digest
 
 on:
   schedule:
-    - cron: "0 2 * * *" # 02:00 UTC = 7:30 AM IST (GitHub may start it a few minutes late)
-  workflow_dispatch: # "Run workflow" button for manual runs
+    # GitHub may delay or even drop scheduled runs at busy times, especially at the top
+    # of the hour. So: one main time off the hour, plus two backups. Every scheduled run
+    # uses --once-per-day, so a backup does nothing if an earlier run already succeeded.
+    - cron: "13 2 * * *" # 02:13 UTC = 7:43 AM IST (main)
+    - cron: "43 3 * * *" # 03:43 UTC = 9:13 AM IST (backup)
+    - cron: "13 6 * * *" # 06:13 UTC = 11:43 AM IST (backup)
+  workflow_dispatch: # "Run workflow" button: always runs
 
 permissions:
   contents: read
@@ -38,4 +43,4 @@ jobs:
         run: python -m jobhunter migrate
 
       - name: Fetch, filter and email the digest
-        run: python -m jobhunter run
+        run: python -m jobhunter run ${{ github.event_name == 'schedule' && '--once-per-day' || '' }}

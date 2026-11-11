@@ -147,6 +147,19 @@ def test_no_titles_means_no_fetch(db_session):
     assert summary.digest == []
 
 
+def test_ran_successfully_today(db_session):
+    from jobhunter.pipeline import ran_successfully_today
+
+    assert not ran_successfully_today(db_session, NOW)
+    db_session.add(Run(source="email", started_at=NOW, ok=False, error="down"))
+    db_session.commit()
+    assert not ran_successfully_today(db_session, NOW)
+    db_session.add(Run(source="email", started_at=NOW, ok=True))
+    db_session.commit()
+    assert ran_successfully_today(db_session, NOW)
+    assert not ran_successfully_today(db_session, NOW + timedelta(days=1))
+
+
 def test_digest_respects_max_jobs(db_session):
     add_profile(db_session)
     jobs = [raw(company=f"C{i}") for i in range(5)]

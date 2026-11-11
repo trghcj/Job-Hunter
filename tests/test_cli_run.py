@@ -32,6 +32,35 @@ def test_crash_sends_redacted_alert(monkeypatch):
     assert "Sup3rSecretPw" not in text
 
 
+class DummySession:
+    closed = False
+
+    def close(self):
+        self.closed = True
+
+
+def test_once_per_day_skips_when_already_ran(monkeypatch, capsys):
+    session = DummySession()
+    monkeypatch.setattr(cli, "_session", lambda: session)
+    monkeypatch.setattr(cli, "_ran_today", lambda s, now: True)
+    assert cli.main(["run", "--once-per-day"]) == 0
+    assert "already ran successfully today" in capsys.readouterr().out
+    assert session.closed
+
+
+def test_ist_day_start():
+    from datetime import UTC, datetime
+
+    from jobhunter.pipeline import ist_day_start
+
+    # 01:00 UTC on 11 Nov is 06:30 IST on 11 Nov -> day starts 10 Nov 18:30 UTC
+    start = ist_day_start(datetime(2026, 11, 11, 1, 0, tzinfo=UTC))
+    assert start == datetime(2026, 11, 10, 18, 30, tzinfo=UTC)
+    # 20:00 UTC on 11 Nov is already 12 Nov 01:30 IST
+    start = ist_day_start(datetime(2026, 11, 11, 20, 0, tzinfo=UTC))
+    assert start == datetime(2026, 11, 11, 18, 30, tzinfo=UTC)
+
+
 def test_alert_failure_does_not_raise(monkeypatch):
     class Broken:
         def send(self, *a):
