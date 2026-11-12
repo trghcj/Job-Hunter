@@ -23,11 +23,17 @@ LIMITS = Limits(daily=100, monthly=3000, per_run=5)
 RESEND_URL = "https://api.resend.com/emails"
 DEFAULT_FROM = "JobHunter <onboarding@resend.dev>"
 IST = timezone(timedelta(hours=5, minutes=30))
+LIMIT_REACHED = {PROVIDER: "Resend email limit reached for today",
+                 "gmail_smtp": "Gmail sending limit reached for today"}
 MODE_LABELS = {"onsite": "On-site", "hybrid": "Hybrid", "remote": "Remote"}
 
 
-class ResendError(RuntimeError):
-    """Sending failed. Message is safe to log and store."""
+class SendError(RuntimeError):
+    """Sending failed (any sender). The message is safe to log and store."""
+
+
+class ResendError(SendError):
+    """Sending through Resend failed. Message is safe to log and store."""
 
 
 class EmailSender(Protocol):
@@ -191,12 +197,13 @@ def deliver_digest(
     if not to:
         return DeliveryResult(False, error="no digest recipient; run "
                               "`python -m jobhunter set-email you@example.com`")
-    if not budget.try_spend(PROVIDER):
-        return DeliveryResult(False, error="Resend email limit reached for today")
+    provider = getattr(sender, "provider", PROVIDER)
+    if not budget.try_spend(provider):
+        return DeliveryResult(False, error=LIMIT_REACHED.get(provider, LIMIT_REACHED[PROVIDER]))
     subject, html_body, text_body = build_digest(jobs, now, links)
     try:
         message_id = sender.send(to, subject, html_body, text_body)
-    except ResendError as exc:
+    except SendError as exc:
         log.error("Digest email failed: %s", exc)
         return DeliveryResult(False, error=str(exc))
     if mark is not None:

@@ -74,6 +74,7 @@ MAX_UPLOAD_REQUEST = MAX_PDF_BYTES + 64_000
 GMAIL_NOTICES = {
     "saved": "Gmail saved. Use Test connection to check it.",
     "removed": "Gmail account removed.",
+    "digest": "Saved. Your daily digest will come from your Gmail if that box is ticked.",
 }
 BASE_CSP = ("default-src 'self'; style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data: https://lh3.googleusercontent.com; "
@@ -627,6 +628,14 @@ def create_app(
             return early
         store_factory(user.id).delete_mail()
         return _see_other("/settings?gmail=removed#gmail")
+
+    @app.post("/gmail/digest")
+    async def gmail_digest(request: Request):
+        user, data, early = await _checked_form(request)
+        if early:
+            return early
+        store_factory(user.id).set_send_digest(data.get("send_digest") == "1")
+        return _see_other("/settings?gmail=digest#gmail")
 
     # ---- connecting the Chrome extension
 

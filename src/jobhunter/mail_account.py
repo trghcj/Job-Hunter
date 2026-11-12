@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 
 from jobhunter.crypto import CryptoError, decrypt_secret, encrypt_secret
 from jobhunter.db import MailAccount, User
+from jobhunter.notify.email_gmail import GmailSender
 from jobhunter.sources.base import SourceAdapter
 from jobhunter.sources.gmail_alerts import DEFAULT_SENDERS, GmailAlertsAdapter
+from jobhunter.user_settings import get_user_setting, set_user_setting
 
 
 @dataclass(frozen=True)
@@ -20,6 +22,7 @@ class MailView:
     has_password: bool = False
     senders: tuple[str, ...] = tuple(DEFAULT_SENDERS)
     last_checked: datetime | None = None
+    send_digest: bool = False
 
 
 def get_account(session: Session, user_id: int) -> MailAccount | None:
@@ -31,7 +34,31 @@ def mail_view(session: Session, user_id: int) -> MailView:
     if acc is None:
         return MailView()
     return MailView(acc.gmail_address, bool(acc.app_password_enc),
-                    tuple(acc.senders or DEFAULT_SENDERS), acc.last_checked)
+                    tuple(acc.senders or DEFAULT_SENDERS), acc.last_checked,
+                    send_digest_enabled(session, user_id))
+
+
+# ---- sending the daily digest from this Gmail (off unless the user ticks the box)
+
+SEND_DIGEST = "digest_via_gmail"
+
+
+def send_digest_enabled(session: Session, user_id: int) -> bool:
+    return get_user_setting(session, user_id, SEND_DIGEST, False) is True
+
+
+def set_send_digest(session: Session, user_id: int, on: bool) -> None:
+    set_user_setting(session, user_id, SEND_DIGEST, bool(on))
+    session.commit()
+
+
+def gmail_sender(session: Session, user_id: int, key: str) -> GmailSender | None:
+    """The user's own Gmail sender when they ticked the box and saved a Gmail account,
+    else None. Raises CryptoError when the password cannot be decrypted with key."""
+    acc = get_account(session, user_id)
+    if acc is None or not send_digest_enabled(session, user_id):
+        return None
+    return GmailSender(acc.gmail_address, decrypt_secret(acc.app_password_enc, key))
 
 
 def save_account(session: Session, user_id: int, address: str, app_password: str | None,

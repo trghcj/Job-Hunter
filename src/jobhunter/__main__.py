@@ -105,20 +105,35 @@ def _action_links(settings, user_id: int):
     return links
 
 
+def _digest_sender(session: Session, user_id: int):
+    """(sender, problem): the user's own Gmail when they chose it, else Resend."""
+    from jobhunter.crypto import CryptoError
+    from jobhunter.mail_account import gmail_sender
+
+    try:
+        own = gmail_sender(session, user_id, get_settings().settings_key.get_secret_value())
+    except CryptoError:
+        return None, "the saved Gmail password could not be decrypted (SETTINGS_KEY changed?)"
+    if own is not None:
+        return own, None
+    sender = _email_sender(session)
+    return sender, None if sender else "RESEND_API_KEY is not set"
+
+
 def _deliver(session: Session, user_id: int, digest, now, run_source: str = "email"):
     from jobhunter.db import Run
     from jobhunter.notify import email_resend
+    from jobhunter.notify.email_gmail import GMAIL_LIMITS, GMAIL_PROVIDER
     from jobhunter.notify.email_resend import DeliveryResult, deliver_digest
     from jobhunter.pipeline import mark_emailed
-    from jobhunter.settings import get_settings
     from jobhunter.usage import DbBudget
 
-    sender = _email_sender(session)
+    sender, problem = _digest_sender(session, user_id)
     if sender is None:
-        result = DeliveryResult(False, error="RESEND_API_KEY is not set") if digest \
-            else DeliveryResult(False)
+        result = DeliveryResult(False, error=problem) if digest else DeliveryResult(False)
     else:
-        budget = DbBudget(session, {email_resend.PROVIDER: email_resend.LIMITS})
+        budget = DbBudget(session, {email_resend.PROVIDER: email_resend.LIMITS,
+                                    GMAIL_PROVIDER: GMAIL_LIMITS})
         result = deliver_digest(
             digest, sender, _recipients(session, user_id), budget, now,
             mark=lambda ids: mark_emailed(session, user_id, ids, now),
@@ -132,9 +147,16 @@ def _deliver(session: Session, user_id: int, digest, now, run_source: str = "ema
     return result
 
 
+def _wants_own_gmail(session: Session, user_id: int) -> bool:
+    from jobhunter.mail_account import get_account, send_digest_enabled
+
+    return send_digest_enabled(session, user_id) and get_account(session, user_id) is not None
+
+
 def deliver_digests(session: Session, summary, now: datetime) -> list[str]:
-    """Email each user's digest. The owner always; others only with your own sending
-    domain (see _email_everyone). Returns problems; one failure does not stop the rest."""
+    """Email each user's digest. The owner always; others from their own Gmail when they
+    chose it, or with your own sending domain (see _email_everyone). Returns problems; one
+    failure does not stop the rest."""
     from jobhunter.pipeline import UserResult
 
     owner = _owner_id(session)
@@ -145,7 +167,7 @@ def deliver_digests(session: Session, summary, now: datetime) -> list[str]:
     users = {owner: UserResult(), **summary.users}
     for user_id, result in users.items():
         is_owner = user_id == owner
-        if not (is_owner or everyone):
+        if not (is_owner or everyone or _wants_own_gmail(session, user_id)):
             continue
         if not is_owner and not _recipients(session, user_id):
             continue  # this user set no digest address: My jobs only

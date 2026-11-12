@@ -19,7 +19,14 @@ from jobhunter.db import Job, Run, SearchProfile
 from jobhunter.drafts import SavedDraft
 from jobhunter.extension_tokens import TokenRow
 from jobhunter.llm.client import LLMClient
-from jobhunter.mail_account import MailView, delete_account, gmail_adapter, mail_view, save_account
+from jobhunter.mail_account import (
+    MailView,
+    delete_account,
+    gmail_adapter,
+    mail_view,
+    save_account,
+    set_send_digest,
+)
 from jobhunter.matching.fit import LEVEL_MIN
 from jobhunter.pipeline import refilter_for_user, visible_to
 from jobhunter.sources.catalog import SOURCE_LABELS, is_enabled
@@ -93,6 +100,7 @@ class SettingsStore(Protocol):
     def load_mail(self) -> MailView: ...
     def save_mail(self, address: str, app_password: str | None, senders: list[str]) -> None: ...
     def delete_mail(self) -> None: ...
+    def set_send_digest(self, on: bool) -> None: ...
     def test_mail(self) -> str: ...
     def tokens(self) -> list[TokenRow]: ...
     def create_token(self, label: str) -> str: ...
@@ -234,6 +242,10 @@ class UserStore:
     def delete_mail(self) -> None:
         with self._sessions() as session:
             delete_account(session, self.user_id)
+
+    def set_send_digest(self, on: bool) -> None:
+        with self._sessions() as session:
+            set_send_digest(session, self.user_id, on)
 
     def test_mail(self) -> str:
         with self._sessions() as session:

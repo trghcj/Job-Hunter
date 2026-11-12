@@ -33,7 +33,11 @@ Daily run: GitHub Actions. LLM via an LLMClient interface (Gemini default).
   (llm.client.parse_draft), shown only as plain text, and a failure keeps the old draft.
 - The Gmail app password is stored only encrypted (crypto.py, SETTINGS_KEY) and is never
   shown on a page, logged, or included in an error message.
-- Respect rate limits: Adzuna max 250 calls/day, Resend max 100 emails/day. Count calls in the database.
+- Respect rate limits: Adzuna max 250 calls/day, Resend max 100 emails/day, Gmail SMTP max 50
+  digests/day. Count calls in the database.
+- A user's digest goes from their own Gmail (notify/email_gmail.py, the saved app password)
+  only when they tick "Send my daily digest from this Gmail" (user setting digest_via_gmail,
+  off by default). Send errors never include the password or the server's reply.
 - Run `ruff check` and `pytest` before saying a task is done.
 - Keep functions small; add type hints; dedupe via jobs.dedupe_key.
 

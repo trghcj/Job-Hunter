@@ -68,6 +68,10 @@ After **Not interested** you can pick an optional reason:
 
 Lowered jobs say why ("Lowered: you avoid AWS"). Everything is listed under **Settings → Hidden and lowered**, where **Remove** undoes it. Links point to `PUBLIC_URL` (default `https://jobhunter-settings.onrender.com`).
 
+### Digest from your own Gmail
+
+Without a sending domain of your own, Resend can only email the owner. Anyone else can still get the daily email: connect Gmail on **Settings → Gmail job alerts** (an app password, which needs Google 2-Step Verification), then tick **Send my daily digest from this Gmail**. The digest then goes from that Gmail to your digest address, using the same app password; nothing else is needed. It is off by default, and the owner can use it too. If Gmail refuses the password, the run reports "Gmail refused the app password" and carries on with everyone else.
+
 ### Cover letter and resume tips
 
 Every job on My jobs has a **Draft** link. On its page, **Write draft** asks Gemini for a 200–250 word cover letter and 3–5 resume tips for that job, from your profile text (without contact details or its first line, so the letter ends with *[Your name]* for you to fill in). Gemini is told to use only facts from your profile and to treat the job ad as untrusted text; its answer is checked and shown as plain text. Edit the letter and **Save edits**, or **Copy** it. The latest draft per job is kept, with your edits; **Redo** writes a fresh one after asking first. Each person can make 10 drafts a day (India time); a failed attempt counts too, and a failure never touches the saved draft. Nothing is sent unless you click Write draft or Redo. Needs `GEMINI_API_KEY` on Render.
@@ -98,6 +102,7 @@ Every call to a rate-limited API is counted in the `api_usage` table before it i
 |---|---|---|
 | Adzuna | 40 per run, 250 per day, 2,500 per month | 25/min, 250/day, 2,500/month |
 | Resend | 5 per run, 100 per day, 3,000 per month | 100/day, 3,000/month |
+| Gmail (sending) | 50 per day, 1,500 per month | about 500/day per account |
 
 ## Tech stack
 
