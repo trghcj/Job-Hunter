@@ -98,3 +98,54 @@ def test_old_jobs_drop_out_of_matches(db_session):
     a = user(db_session, 1)
     run_pipeline(db_session, [FakeAdapter("fake", [raw()])], [], now=NOW - timedelta(days=20))
     assert store(db_session).list(a, "matches") == []
+
+
+# ---- fit filter, tab counts and when a job was saved / applied
+
+def _scored(db_session, a, scores: dict[str, tuple[float, str | None]]) -> dict[str, int]:
+    """Jobs from companies A, B, ... with the given (score, fit reason)."""
+    from sqlalchemy import update
+
+    from jobhunter.db import JobScore
+
+    run_pipeline(db_session, [FakeAdapter("fake", [raw(company=c) for c in scores])], [],
+                 now=NOW)
+    ids = {c.company: c.job_id for c in store(db_session).list(a, "matches")}
+    for company, (score, reason) in scores.items():
+        db_session.execute(update(JobScore)
+                           .where(JobScore.user_id == a, JobScore.job_id == ids[company])
+                           .values(final_score=score, fit_reason=reason))
+    db_session.commit()
+    return ids
+
+
+def test_fit_filter(db_session):
+    a = user(db_session, 1)
+    _scored(db_session, a, {"A": (0.8, "fits"), "B": (0.6, "fits"), "C": (0.3, "weak"),
+                            "D": (0.9, None)})  # no reason: no level, so never "strong"
+    s = store(db_session)
+    assert [c.company for c in s.list(a, "matches", fit="strong")] == ["A"]
+    assert [c.company for c in s.list(a, "matches", fit="good")] == ["A", "B"]
+    assert len(s.list(a, "matches")) == 4
+
+
+def test_counts(db_session):
+    a = user(db_session, 1)
+    ids = _scored(db_session, a, {"A": (0.8, "x"), "B": (0.6, "x"), "C": (0.3, "x")})
+    s = store(db_session)
+    assert s.counts(a) == {"matches": 3, "saved": 0, "applied": 0}
+    s.set_status(a, ids["A"], "saved")    # saved jobs stay in Matches
+    s.set_status(a, ids["B"], "applied")  # applied ones leave it
+    assert s.counts(a) == {"matches": 2, "saved": 1, "applied": 1}
+    b = user(db_session, 2, titles=("Python Developer",))
+    assert s.counts(b) == {"matches": 0, "saved": 0, "applied": 0}
+
+
+def test_status_at_on_cards(db_session):
+    a = user(db_session, 1)
+    ids = _scored(db_session, a, {"A": (0.8, "x"), "B": (0.6, "x")})
+    s = store(db_session)
+    assert all(c.status_at is None for c in s.list(a, "matches"))
+    s.set_status(a, ids["A"], "saved")
+    saved = s.list(a, "saved")[0]
+    assert saved.status_at is not None and abs(saved.status_at - datetime.now(UTC)).seconds < 60

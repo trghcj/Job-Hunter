@@ -36,7 +36,7 @@ from jobhunter.web.actions_store import DbActions, JobBrief
 from jobhunter.web.api import ApiGateway, DbApi, RateLimiter, api_router
 from jobhunter.web.firebase_auth import FirebaseVerifier, TokenError
 from jobhunter.web.forms import WORK_MODES, parse_admin_form, parse_form, parse_gmail_form
-from jobhunter.web.jobs_store import TABS, JobsStore, JobsView
+from jobhunter.web.jobs_store import FIT_FILTERS, TABS, JobsStore, JobsView
 from jobhunter.web.store import AdminStore, SettingsStore, UserStore
 
 log = logging.getLogger(__name__)
@@ -57,6 +57,19 @@ def ist(value: datetime | None, fmt: str, missing: str = "") -> str:
 
 
 TEMPLATES.env.filters["ist"] = ist
+
+
+def days_ago(value: datetime | None, now: datetime | None = None) -> str:
+    """"today", "yesterday" or "N days ago", counted in India dates."""
+    if value is None:
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    days = ((now or datetime.now(UTC)).astimezone(IST).date() - value.astimezone(IST).date()).days
+    return "today" if days <= 0 else "yesterday" if days == 1 else f"{days} days ago"
+
+
+TEMPLATES.env.filters["days_ago"] = days_ago
 SESSION_DAYS = 30
 AVOID_GROUPS = (("companies", "Hidden companies"), ("cities", "Hidden cities"),
                 ("skills", "Lowered skills"), ("titles", "Lowered roles"))
@@ -190,8 +203,10 @@ def create_app(
     if draft_client is None:
         from jobhunter.llm.gemini import client_from_settings
 
+        shared = client_from_settings(settings)  # one HTTP client for every draft
+
         def draft_client() -> LLMClient | None:
-            return client_from_settings(settings)
+            return shared
     secret = settings.session_secret.get_secret_value()
     if len(secret) < 32:
         raise RuntimeError("Set SESSION_SECRET (32+ random characters) to start.")
@@ -214,6 +229,7 @@ def create_app(
         verifier = FirebaseVerifier(settings.firebase_project_id)
 
     app = FastAPI(title="JobHunter", docs_url=None, redoc_url=None, openapi_url=None)
+    app.state.draft_client = draft_client
     app.add_middleware(
         SessionMiddleware,
         secret_key=secret,
@@ -384,8 +400,11 @@ def create_app(
             return early
         tab = request.query_params.get("tab", "matches")
         tab = tab if tab in TABS else "matches"
+        fit = request.query_params.get("fit")
+        fit = fit if tab == "matches" and fit in FIT_FILTERS else None
         ctx = {"csrf": _csrf(request), "user": user, "page": "jobs", "tab": tab, "tabs": TABS,
-               "cards": jobs_store.list(user.id, tab),
+               "fit": fit, "counts": jobs_store.counts(user.id),
+               "cards": jobs_store.list(user.id, tab, fit=fit),
                "has_profile": bool(store_factory(user.id).load_profile().text)}
         return TEMPLATES.TemplateResponse(request, "jobs.html", ctx)
 

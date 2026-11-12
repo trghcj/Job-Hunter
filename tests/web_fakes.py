@@ -69,8 +69,11 @@ def page_csrf(client, path: str = "/settings") -> str:
 class NoJobs:
     """JobsView with nothing in it."""
 
-    def list(self, user_id, tab, limit=100):
+    def list(self, user_id, tab, limit=100, fit=None):
         return []
+
+    def counts(self, user_id):
+        return {"matches": 0, "saved": 0, "applied": 0}
 
     def set_status(self, user_id, job_id, status):
         return False

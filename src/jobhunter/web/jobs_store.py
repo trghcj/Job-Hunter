@@ -4,12 +4,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Literal, Protocol
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
 
 from jobhunter.db import Job, JobScore, JobStatus
-from jobhunter.matching.fit import level_of
+from jobhunter.matching.fit import LEVEL_MIN, level_of
 from jobhunter.pipeline import status_join, visible_to
 from jobhunter.user_settings import get_user_setting
 
@@ -33,48 +33,72 @@ class JobCard:
     score: float | None
     level: str | None = None  # strong / good / weak, once the user has a profile
     reason: str | None = None  # why it fits
+    status_at: datetime | None = None  # when the user saved / applied / hid it
+
+
+FIT_FILTERS = ("strong", "good")  # Matches can show only jobs at this level or better
 
 
 class JobsView(Protocol):
-    def list(self, user_id: int, tab: str, limit: int = 100) -> list[JobCard]: ...
+    def list(self, user_id: int, tab: str, limit: int = 100,
+             fit: str | None = None) -> list[JobCard]: ...
+    def counts(self, user_id: int) -> dict[str, int]: ...
     def set_status(self, user_id: int, job_id: int, status: str) -> bool: ...
 
 
-def _card(job: Job, status: str | None, score: float | None, reason: str | None) -> JobCard:
+def _card(job: Job, status: str | None, score: float | None, reason: str | None,
+          status_at: datetime | None) -> JobCard:
     level = level_of(score) if reason and score is not None else None
     return JobCard(job.id, job.title, job.company, job.location_text, job.work_mode or "unknown",
-                   job.source, job.posted_at, job.url, status or "new", score, level, reason)
+                   job.source, job.posted_at, job.url, status or "new", score, level, reason,
+                   status_at)
 
+
+COLUMNS = (Job, JobStatus.status, JobScore.final_score, JobScore.fit_reason,
+           JobStatus.updated_at)
+
+
+def _tab_query(session: Session, user_id: int, tab: str, fit: str | None = None) -> Select:
+    """The jobs on one tab, best first (Matches) or most recent first (Saved, Applied)."""
+    if tab in ("saved", "applied"):
+        return (select(*COLUMNS)
+                .join(JobStatus, status_join(user_id))
+                .outerjoin(JobScore, and_(JobScore.job_id == Job.id,
+                                          JobScore.user_id == user_id))
+                .where(JobStatus.status == tab, visible_to(user_id))
+                .order_by(JobStatus.updated_at.desc().nulls_last(), Job.id.desc()))
+    max_age = int(get_user_setting(session, user_id, "max_age_days", DEFAULT_MAX_AGE_DAYS))
+    cutoff = datetime.now(UTC) - timedelta(days=max_age)
+    stmt = (select(*COLUMNS)
+            .join(JobScore, and_(JobScore.job_id == Job.id, JobScore.user_id == user_id))
+            .outerjoin(JobStatus, status_join(user_id))
+            .where(JobScore.passed_filters.is_(True), visible_to(user_id),
+                   Job.first_seen_at >= cutoff,
+                   or_(JobStatus.status.is_(None),
+                       JobStatus.status.not_in(("hidden", "applied"))))
+            .order_by(JobScore.final_score.desc().nulls_last(),
+                      Job.posted_at.desc().nulls_last(), Job.id))
+    if fit in FIT_FILTERS:  # a level exists only once the fit has a reason
+        stmt = stmt.where(JobScore.fit_reason.is_not(None),
+                          JobScore.final_score >= LEVEL_MIN[fit])
+    return stmt
 
 class JobsStore:
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._sessions = session_factory
 
-    def list(self, user_id: int, tab: str, limit: int = 100) -> list[JobCard]:
+    def list(self, user_id: int, tab: str, limit: int = 100,
+             fit: str | None = None) -> list[JobCard]:
         with self._sessions() as session:
-            if tab in ("saved", "applied"):
-                stmt = (select(Job, JobStatus.status, JobScore.final_score, JobScore.fit_reason)
-                        .join(JobStatus, status_join(user_id))
-                        .outerjoin(JobScore, and_(JobScore.job_id == Job.id,
-                                                  JobScore.user_id == user_id))
-                        .where(JobStatus.status == tab, visible_to(user_id))
-                        .order_by(JobStatus.updated_at.desc().nulls_last(), Job.id.desc()))
-            else:
-                max_age = int(get_user_setting(session, user_id, "max_age_days",
-                                               DEFAULT_MAX_AGE_DAYS))
-                cutoff = datetime.now(UTC) - timedelta(days=max_age)
-                stmt = (select(Job, JobStatus.status, JobScore.final_score, JobScore.fit_reason)
-                        .join(JobScore, and_(JobScore.job_id == Job.id,
-                                             JobScore.user_id == user_id))
-                        .outerjoin(JobStatus, status_join(user_id))
-                        .where(JobScore.passed_filters.is_(True), visible_to(user_id),
-                               Job.first_seen_at >= cutoff,
-                               or_(JobStatus.status.is_(None),
-                                   JobStatus.status.not_in(("hidden", "applied"))))
-                        .order_by(JobScore.final_score.desc().nulls_last(),
-                                  Job.posted_at.desc().nulls_last(), Job.id))
-            return [_card(job, status, score, reason)
-                    for job, status, score, reason in session.execute(stmt.limit(limit))]
+            stmt = _tab_query(session, user_id, tab, fit).limit(limit)
+            return [_card(*row) for row in session.execute(stmt)]
+
+    def counts(self, user_id: int) -> dict[str, int]:
+        """How many jobs each tab holds (Matches counts every level)."""
+        with self._sessions() as session:
+            return {tab: session.scalar(select(func.count()).select_from(
+                        _tab_query(session, user_id, tab).order_by(None).subquery())) or 0
+                    for tab in TABS}
 
     def set_status(self, user_id: int, job_id: int, status: str) -> bool:
         """False (nothing changed) for an unknown status or a job this user cannot see."""
