@@ -1,11 +1,50 @@
 # JobHunter
 
-A scheduled Python service that finds India-based jobs for your target titles once a day, filters them against your experience range and locations, and emails you a short digest of new matches. It runs in the cloud every morning at about 7:45 AM IST, so your laptop can stay off, and it runs entirely on free tiers.
+JobHunter finds India-based jobs for your target titles every morning, ranks them by how well they fit your resume, and emails you a short digest of the new ones. It runs in the cloud at about 7:45 AM IST, so your laptop can stay off. It costs nothing: everything runs on free tiers. Friends can sign in with Google and get their own lists, and a Chrome extension shows the fit of the job you are looking at.
 
-- **Sources:** Adzuna India, Amazon jobs, the careers sites (Greenhouse, Lever, Ashby, Workday, SmartRecruiters) of a 125-company watchlist of Indian tech companies and MNCs with India offices, and the Remotive and Remote OK remote feeds. Every source is a plug-in adapter; more are on the [roadmap](#roadmap).
-- **Accounts:** anyone signs in with Google (Firebase) and gets their own job titles, experience range, cities, work modes, Gmail job alerts and a **My jobs** page. Jobs are fetched once a day for everyone, then filtered for each person. Settings live in PostgreSQL, not in files.
-- **Resilient:** a failing source never stops a run. You get a failure alert email, and a weekly "still alive" email, so silence never hides a broken pipeline.
-- **Cost:** ₹0 a month (GitHub Actions, Supabase, Resend, Render and Adzuna free tiers).
+## Features
+
+### Finding jobs
+- **Many sources, one list.** Adzuna India; Amazon jobs; the careers sites (Greenhouse, Lever, Ashby, Workday, SmartRecruiters) of an editable 125-company watchlist of Indian tech companies and MNCs with India offices; the Remotive and Remote OK remote feeds; and your own LinkedIn and Naukri job-alert emails, read from your Gmail. Every source is a plug-in adapter.
+- **Fetched once, filtered per person.** Jobs are fetched once a day for everyone, de-duplicated across sources, then filtered for each user by title, experience range, city, work mode, exclude words and age. A dropped job gets a readable reason.
+- **India-aware.** Delhi covers Delhi NCR, Mumbai covers Navi Mumbai and Thane, "Remote (US only)" roles are dropped, and level titles (II, III, Senior, Staff) count as years of experience.
+
+### Ranking by fit
+- **Fit score from your resume.** Upload a PDF or paste the text. JobHunter finds your skills (about 300, including other names like JS, Postgres and k8s) and scores each job on skills (65%) and title (35%).
+- **Strong / Good / Weak levels** with a reason on every job, such as *Matches Python, Django, SQL · Missing AWS*.
+- **Optional Gemini review.** Off by default. When on, Gemini rates your 10 best new jobs a day, and its rating is blended into the score.
+- **It learns what you don't want.** "Not interested" can take a reason: hide a company or a city, lower jobs needing skills you lack, or lower a kind of role. Everything is listed, and can be undone, on Settings.
+
+### The daily email
+- **A short digest every morning** (about 7:45 AM IST) with only new jobs, best fits first, at the fit level you choose (strong only, good and up, or all).
+- **One-tap actions.** Each job has **Save**, **Applied** and **Not interested** links that work without signing in. Each link is signed for you and that one job, and email link scanners cannot trigger it.
+- **From your own Gmail if you like.** Without a sending domain, anyone can still get their digest by ticking *Send my daily digest from this Gmail*.
+- **Never silent.** You get a failure alert email when something breaks, and a weekly "still alive" summary.
+
+### My jobs (web app)
+- **A friendly home page:** "Good morning, Asha · 3 new matches today", using your first name and India time.
+- **A fit meter on every match:** a colored bar and percentage, and a colored card edge (green strong, marigold good, grey weak).
+- **Tabs with counts** (Matches, Saved, Applied) and **fit filters** (All, Strong fit, Good fit & up).
+- **Follow-up dates:** Saved and Applied jobs say when ("Applied 3 days ago").
+- **Cover letter and resume tips** for any job. Gemini writes a 200–250 word letter from your profile and 3–5 tips for that job. You can edit, save, copy or redo it (10 a day).
+- **Works on phones,** in light and dark mode. The gentle motion switches off when your device is set to reduce motion.
+
+### Chrome extension (the JobHunter bubble)
+- A small bubble on LinkedIn, Naukri, Indeed and company careers pages. For the job you have open, it shows whether it matches your filters and how well it fits. It can save the job to My jobs or mark it applied, it lists your latest matches, and it marks jobs you have already seen.
+- It only reads the page you opened. It never clicks, scrolls, navigates or searches for you.
+
+### Accounts, sharing and admin
+- **Google sign-in** for each person, with their own titles, cities, experience range, Gmail, resume and job lists.
+- **Invite-only if you want.** `ALLOWED_EMAILS` and `ADMIN_EMAILS` decide who can sign in and who gets the Admin page (users, blocking, job sources, the shared company watchlist).
+
+### Reliability, privacy and cost
+- **Reliable:** one failing source never stops a run. Calls to rate-limited APIs are counted in the database, so free limits are never exceeded. A backup schedule runs only if the main run did not succeed.
+- **Private by design:**
+  - the resume PDF is never stored, only cleaned text without email, phone or links;
+  - the Gmail app password is stored encrypted;
+  - LinkedIn and Naukri are never logged into or scraped;
+  - AI requests never include your contact details or your resume's first line (usually your name).
+- **₹0 a month** on free tiers: GitHub Actions, Supabase, Render, Resend, Adzuna and Gemini.
 
 ## How it works
 
@@ -17,12 +56,14 @@ GitHub Actions (daily 7:43 IST, backups 9:13 and 11:43 IST)
                                                      Lever / Ashby boards, Remotive, Remote OK
         3. normalize: city, work mode, country, dedupe key
         4. save new jobs (duplicates collapse on dedupe_key)
-        5. hard filters on every recent, unsent job
-        6. pick the best unsent matches ........... digest
-        7. email the digest, mark jobs as sent .... Resend
-        8. on problems: alert email; on Sundays: weekly heartbeat
+        5. hard filters on every recent, unsent job, per user
+        6. fit score from each user's resume ...... optional Gemini review of the top 10
+        7. pick the best unsent matches ........... digest
+        8. email each digest, mark jobs as sent ... Resend, or the user's own Gmail
+        9. on problems: alert email; on Sundays: weekly heartbeat
 
-Settings page (FastAPI on Render) ──writes──▶ the same PostgreSQL tables
+Web app (FastAPI on Render) ──reads/writes──▶ the same PostgreSQL tables
+Chrome extension ──bearer token──▶ /api/v1 on the web app
 ```
 
 ### Filters
@@ -106,31 +147,41 @@ Every call to a rate-limited API is counted in the `api_usage` table before it i
 
 ## Tech stack
 
-Python 3.12 · SQLAlchemy 2 + Alembic · PostgreSQL (Supabase) · httpx · pydantic-settings · FastAPI + Jinja2 (settings page) · Resend (email) · GitHub Actions (schedule) · Render (web hosting) · pytest · ruff
+Python 3.12 · SQLAlchemy 2 + Alembic · PostgreSQL (Supabase) · httpx · pydantic-settings · FastAPI + Jinja2 (web app) · Firebase (Google sign-in) · Resend and Gmail SMTP (email) · Google Gemini (optional AI review and cover letters) · pypdf (resume text) · GitHub Actions (schedule) · Render (web hosting) · Chrome extension (Manifest V3) · pytest · ruff · Node test runner (extension)
 
 ## Project layout
 
 ```
 src/jobhunter/
-  __main__.py          CLI: migrate, run, set-titles, set-email, test-email, heartbeat
+  __main__.py          CLI: migrate, run, set-titles, set-email, test-email, heartbeat,
+                       rescore, make-owner
   settings.py          secrets from environment / .env
   db.py                SQLAlchemy models and engine (with connect retry)
   models.py            RawJob: the one format every source returns
   normalize.py         city, country, work mode and dedupe key
-  pipeline.py          fetch → normalize → dedupe → filter → digest
-  usage.py             call budgets for rate-limited APIs
+  pipeline.py          fetch → normalize → dedupe → filter → score → digest
+  accounts.py          Google accounts, invite-only list, admins, owner, make-owner
   user_settings.py     load and seed settings stored in the database
+  mail_account.py      each user's Gmail (encrypted app password) for alerts and sending
+  profile.py           resume: PDF text, cleaning, skills
+  review.py            optional Gemini review of each user's top jobs
+  drafts.py            cover letter and resume tips, with a daily limit
+  actions.py           signed one-tap links in the email
+  avoid.py             "Not interested" reasons: hidden and lowered jobs
+  crypto.py            encryption for stored secrets
+  usage.py             call budgets for rate-limited APIs
   sources/             one adapter per source (adzuna, greenhouse, lever, ashby, workday,
-                       smartrecruiters, amazon, remotive, remoteok), boards.py (shared
-                       careers-site logic), watchlist.py,
-                       registry.py (which sources run), catalog.py, base.py
-  matching/filters.py  hard filters
-  notify/              digest email (Resend), failure alerts, weekly heartbeat
-  web/                 settings page: app, form validation, templates
+                       smartrecruiters, amazon, remotive, remoteok, gmail_alerts),
+                       boards.py (shared careers-site logic), watchlist.py, registry.py
+  matching/            filters.py (hard filters), skills.py (skill list), fit.py (fit score)
+  llm/                 LLMClient interface, prompts, strict reply checks, Gemini client
+  notify/              digest email (Resend or Gmail), failure alerts, weekly heartbeat
+  web/                 FastAPI app: pages, templates, styles, extension API, Google sign-in
+extension/             Chrome extension: page readers, bubble, popup, tests
 alembic/               database migrations
-tests/                 pytest suite; fixtures/ holds saved API responses
+tests/                 pytest suite; fixtures/ holds saved API responses and emails
 .github/workflows/     daily scheduled run
-render.yaml            Render blueprint for the settings page
+render.yaml            Render blueprint for the web app
 config.yaml            first-run defaults only; real settings live in the database
 data/                  default company watchlist, seeded into the database once
 ```
@@ -187,11 +238,12 @@ Running `run` twice sends the digest once; the second run reports `no new jobs, 
 | `set-email ADDRESS...` | Sets the digest recipients. |
 | `test-email` | Sends a one-job sample digest. |
 | `heartbeat` | Sends the weekly summary now. |
+| `rescore` | Finds skills in jobs saved earlier and re-scores everyone's jobs. Run once after upgrading. |
 | `make-owner [--apply]` | If you first signed in before `OWNER_EMAIL` was set, makes that account the owner: keeps the placeholder's emailed marks, private jobs and missing settings, then deletes the placeholder. Shows what would change unless `--apply` is given. |
 
 ## Web app
 
-Pages: **My jobs** (a greeting with today's new-match count; your matches, best first, each with a fit meter and Save / Applied / Not interested; tabs with counts; *Strong fit* and *Good fit & up* filters on Matches; Saved and Applied show when you saved or applied, e.g. "Applied 3 days ago"), **Settings** (titles, experience, cities, work modes, exclude words, digest, Gmail job alerts), and **Admin** for the owner (users, block/unblock, job sources and the company watchlist, which everyone shares).
+Pages: **My jobs** (a greeting with today's new-match count; your matches, best first, each with a fit meter and Save / Applied / Not interested; tabs with counts; *Strong fit* and *Good fit & up* filters on Matches; Saved and Applied show when you saved or applied, e.g. "Applied 3 days ago"), **Settings** (titles, experience, cities, work modes, exclude words, digest, My profile and resume, Gmail job alerts and sending, Hidden and lowered, Chrome extension), and **Admin** for the owner (users, block/unblock, job sources and the company watchlist, which everyone shares).
 
 Run it locally:
 
@@ -202,9 +254,9 @@ $env:WEB_HTTPS_ONLY = "false"   # local http only; keep secure cookies online
 
 Then open http://localhost:8000 (`localhost` is an authorised Firebase domain by default) and click **Continue with Google**. Titles, cities and exclude words can be separated by commas or new lines. Saved changes apply on the next run.
 
-**Accounts and limits.** Sign-up is open to any Google account with a verified email (or only to `ALLOWED_EMAILS` when that is set), up to 50 users (later sign-ins see "JobHunter is full"; the owner always gets in), with at most 15 job titles each. The first sign-in with `OWNER_EMAIL` claims the owner account. To hand ownership to another account later, set `users.is_owner` in the database by hand.
+**Accounts and limits.** Sign-up is open to any Google account with a verified email (or only to `ALLOWED_EMAILS` when that is set), up to 50 users (later sign-ins see "JobHunter is full"; the owner always gets in), with at most 15 job titles each. The first sign-in with `OWNER_EMAIL` claims the owner account. If you signed in before `OWNER_EMAIL` was set, run `python -m jobhunter make-owner` to preview and then `make-owner --apply`.
 
-**Who gets email.** Resend's free plan without your own domain only delivers to your own address, so only the owner gets the daily email. Everyone else sees their matches on My jobs. Once you verify a domain in Resend, set `digest_from` in `app_settings` to an address on it (for example `JobHunter <jobs@yourdomain.in>`) and every user with a digest address gets an email too; no code change.
+**Who gets email.** Resend's free plan without your own domain only delivers to your own address, so through Resend only the owner gets the daily email. Anyone else can tick *Send my daily digest from this Gmail* on Settings (see [Digest from your own Gmail](#digest-from-your-own-gmail)), and everyone sees their matches on My jobs. Once you verify a domain in Resend, set `digest_from` in `app_settings` to an address on it (for example `JobHunter <jobs@yourdomain.in>`) and every user with a digest address gets an email too; no code change.
 
 **Security.** The server checks each Google sign-in token itself (RS256 signature against Google's public certificates, audience, issuer, expiry, verified email), then keeps a signed, HTTPS-only session cookie for 30 days. Every form has a CSRF token, every per-user query is filtered by user id, jobs from someone's Gmail are visible only to them, output is escaped, and headers block framing. The app refuses to start without `SESSION_SECRET`.
 
@@ -237,17 +289,3 @@ Tests make no network calls: API responses are replayed from `tests/fixtures/`, 
 - LinkedIn and Naukri accounts are never logged into or automated, and their sites are never scraped. Their jobs come only from their own alert emails in your Gmail.
 - The Gmail app password is stored encrypted and is never shown, logged or put in an error message.
 - Only cleaned resume text is stored (no email, phone or links); the uploaded PDF is never stored or logged. Gemini sees it, without its first line, only for users who turn the review on or click Write draft for a job.
-
-## Roadmap
-
-| Phase | Status | Scope |
-|---|---|---|
-| 0 | Done | Project skeleton, settings, database migrations |
-| 1 | Done | Adzuna adapter, normalizer, filters, digest email, settings page on Render |
-| 2 | In progress | Daily GitHub Actions run, failure alerts, weekly heartbeat (waiting on the first scheduled run) |
-| 3 | Done | Careers sites (Greenhouse, Lever, Ashby, Workday, SmartRecruiters) from an editable 125-company watchlist; Amazon; Remotive and Remote OK; Gmail alert reader with LinkedIn and Naukri parsers checked against real alert emails |
-| A | Done | Google sign-in for many users, per-user settings and Gmail, My jobs page, owner Admin page, new marigold look and logo |
-| B | Done | Chrome bubble extension: on the job you open on LinkedIn, Naukri, Indeed or a careers site (no automatic browsing), shows whether it matches your filters, saves it to My jobs, lists your latest matches and marks jobs you have seen |
-| 4 | Done | Fit score from your resume (skills and title), Strong/Good/Weak levels with reasons, digest fit choice, optional Gemini review of your top 10 a day |
-| 5 | Done | One-click Save / Applied / Not interested links in the email; optional reasons hide or lower similar jobs, undoable on Settings |
-| 6 | Done | Cover letter (editable, 200–250 words) and resume tips per job from Gemini, on request, 10 a day |
