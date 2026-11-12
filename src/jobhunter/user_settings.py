@@ -54,7 +54,8 @@ def load_defaults(path: Path = DEFAULT_CONFIG) -> tuple[dict[str, Any], dict[str
 
 
 # Settings each user has for themselves (user_settings); everything else is shared.
-USER_KEYS = ("digest", "digest_to", "max_age_days", "profile", "llm_review", "digest_fit")
+USER_KEYS = ("digest", "digest_to", "max_age_days", "profile", "llm_review", "digest_fit",
+             "avoid")
 
 
 def seed_defaults(session: Session, path: Path = DEFAULT_CONFIG) -> None:
