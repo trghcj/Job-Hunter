@@ -2,7 +2,16 @@
 
 import httpx
 
-from jobhunter.llm.client import JobForReview, LLMError, Review, build_prompt, parse_reviews
+from jobhunter.llm.client import (
+    Draft,
+    JobForReview,
+    LLMError,
+    Review,
+    build_draft_prompt,
+    build_prompt,
+    parse_draft,
+    parse_reviews,
+)
 
 API = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 SCHEMA = {
@@ -13,6 +22,12 @@ SCHEMA = {
                        "reason": {"type": "STRING"}},
         "required": ["id", "fit", "reason"],
     },
+}
+DRAFT_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {"letter": {"type": "STRING"},
+                   "tips": {"type": "ARRAY", "items": {"type": "STRING"}}},
+    "required": ["letter", "tips"],
 }
 
 
@@ -25,11 +40,19 @@ class GeminiClient:
         self._http = http or httpx.Client(timeout=timeout)
 
     def review(self, profile_text: str, jobs: list[JobForReview]) -> list[Review]:
+        text = self._generate(build_prompt(profile_text, jobs), SCHEMA, 0.2)
+        return parse_reviews(text, {job.id for job in jobs})
+
+    def draft(self, profile_text: str, job: JobForReview) -> Draft:
+        return parse_draft(self._generate(build_draft_prompt(profile_text, job),
+                                          DRAFT_SCHEMA, 0.4))
+
+    def _generate(self, prompt: str, schema: dict, temperature: float) -> str:
+        """The model's JSON answer as text. Raises LLMError without secrets or reply bodies."""
         body = {
-            "contents": [{"role": "user",
-                          "parts": [{"text": build_prompt(profile_text, jobs)}]}],
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "generationConfig": {"responseMimeType": "application/json",
-                                 "responseSchema": SCHEMA, "temperature": 0.2},
+                                 "responseSchema": schema, "temperature": temperature},
         }
         try:
             response = self._http.post(API.format(model=self.model), json=body,
@@ -42,7 +65,6 @@ class GeminiClient:
             # The body is not included: it is not ours and could echo request details.
             raise LLMError(f"Gemini answered HTTP {response.status_code}.")
         try:
-            text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+            return response.json()["candidates"][0]["content"]["parts"][0]["text"]
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise LLMError("Gemini's answer had an unexpected shape.") from exc
-        return parse_reviews(text, {job.id for job in jobs})
