@@ -70,6 +70,21 @@ def days_ago(value: datetime | None, now: datetime | None = None) -> str:
 
 
 TEMPLATES.env.filters["days_ago"] = days_ago
+
+
+def greeting(now: datetime, name: str | None) -> str:
+    """"Good morning, Asha" by India time; "Hello" late at night; no name if unknown."""
+    hour = now.astimezone(IST).hour
+    if 5 <= hour < 12:
+        hello = "Good morning"
+    elif 12 <= hour < 17:
+        hello = "Good afternoon"
+    elif 17 <= hour < 23:
+        hello = "Good evening"
+    else:
+        hello = "Hello"
+    words = (name or "").split()
+    return f"{hello}, {words[0]}" if words else hello
 SESSION_DAYS = 30
 AVOID_GROUPS = (("companies", "Hidden companies"), ("cities", "Hidden cities"),
                 ("skills", "Lowered skills"), ("titles", "Lowered roles"))
@@ -404,6 +419,8 @@ def create_app(
         fit = fit if tab == "matches" and fit in FIT_FILTERS else None
         ctx = {"csrf": _csrf(request), "user": user, "page": "jobs", "tab": tab, "tabs": TABS,
                "fit": fit, "counts": jobs_store.counts(user.id),
+               "hello": greeting(datetime.now(UTC), user.name),
+               "new_today": jobs_store.new_today(user.id),
                "cards": jobs_store.list(user.id, tab, fit=fit),
                "has_profile": bool(store_factory(user.id).load_profile().text)}
         return TEMPLATES.TemplateResponse(request, "jobs.html", ctx)

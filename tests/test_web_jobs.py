@@ -34,6 +34,11 @@ class FakeJobs:
     def counts(self, user_id):
         return {tab: len(cards) for tab, cards in self.cards.items()}
 
+    today = 3
+
+    def new_today(self, user_id):
+        return self.today
+
     def set_status(self, user_id, job_id, status):
         if job_id not in (1, 2) or status not in ("new", "saved", "applied", "hidden"):
             return False
@@ -204,3 +209,37 @@ def test_days_ago_uses_india_dates():
     assert days_ago(datetime(2026, 11, 13, 18, 0, tzinfo=UTC), now) == "yesterday"   # 23:30 IST
     assert days_ago(datetime(2026, 11, 10, 6, 0, tzinfo=UTC), now) == "4 days ago"
     assert days_ago(None, now) == ""
+
+
+
+# ---- the friendlier look: greeting, today's count, fit meter
+
+def test_greeting_by_india_time():
+    from jobhunter.web.app import greeting
+
+    at = lambda h, m=0: datetime(2026, 11, 14, h, m, tzinfo=UTC)  # noqa: E731
+    assert greeting(at(1, 30), "Divyansh Singh") == "Good morning, Divyansh"   # 07:00 IST
+    assert greeting(at(7, 0), "Divyansh") == "Good afternoon, Divyansh"        # 12:30 IST
+    assert greeting(at(12, 0), "Asha") == "Good evening, Asha"                 # 17:30 IST
+    assert greeting(at(20, 0), None) == "Hello"                                # 01:30 IST
+
+
+def test_my_jobs_greets_with_todays_count(client, jobs):
+    sign_in(client)
+    page = client.get("/").text
+    assert ", Owner" in page and "3 new matches today" in page
+    jobs.today = 1
+    assert "1 new match today" in client.get("/").text
+    jobs.today = 0
+    assert "No new matches yet today" in client.get("/").text
+
+
+def test_fit_meter_on_cards(client, jobs):
+    jobs.cards["matches"] = [replace(card(1), level="strong", reason="Matches Python",
+                                     score=0.823),
+                             replace(card(2), level=None, score=1.0)]
+    sign_in(client)
+    page = client.get("/").text
+    assert 'class="card job fit-strong"' in page
+    assert 'style="width: 82%"' in page and "82% match" in page
+    assert page.count('class="meter') == 1  # no meter without a fit level

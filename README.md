@@ -191,7 +191,7 @@ Running `run` twice sends the digest once; the second run reports `no new jobs, 
 
 ## Web app
 
-Pages: **My jobs** (your matches, best first, with Save / Applied / Not interested; tabs with counts; *Strong fit* and *Good fit & up* filters on Matches; Saved and Applied show when you saved or applied, e.g. "Applied 3 days ago"), **Settings** (titles, experience, cities, work modes, exclude words, digest, Gmail job alerts), and **Admin** for the owner (users, block/unblock, job sources and the company watchlist, which everyone shares).
+Pages: **My jobs** (a greeting with today's new-match count; your matches, best first, each with a fit meter and Save / Applied / Not interested; tabs with counts; *Strong fit* and *Good fit & up* filters on Matches; Saved and Applied show when you saved or applied, e.g. "Applied 3 days ago"), **Settings** (titles, experience, cities, work modes, exclude words, digest, Gmail job alerts), and **Admin** for the owner (users, block/unblock, job sources and the company watchlist, which everyone shares).
 
 Run it locally:
 

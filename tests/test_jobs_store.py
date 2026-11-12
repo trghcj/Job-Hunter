@@ -149,3 +149,19 @@ def test_status_at_on_cards(db_session):
     s.set_status(a, ids["A"], "saved")
     saved = s.list(a, "saved")[0]
     assert saved.status_at is not None and abs(saved.status_at - datetime.now(UTC)).seconds < 60
+
+
+def test_new_today_counts_matches_first_seen_today(db_session):
+    from sqlalchemy import update
+
+    from jobhunter.db import Job
+
+    a = user(db_session, 1)
+    ids = _scored(db_session, a, {"A": (0.8, "x"), "B": (0.6, "x"), "C": (0.3, "x")})
+    db_session.execute(update(Job).where(Job.id == ids["C"])
+                       .values(first_seen_at=NOW - timedelta(days=2)))
+    db_session.commit()
+    s = store(db_session)
+    assert s.new_today(a) == 2
+    s.set_status(a, ids["A"], "hidden")  # hidden jobs are not news
+    assert s.new_today(a) == 1

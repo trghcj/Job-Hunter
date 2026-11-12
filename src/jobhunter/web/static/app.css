@@ -210,3 +210,42 @@ label.check input { width: 18px; height: 18px; accent-color: var(--accent); }
 .chips a[aria-current="true"] { color: var(--ink); border-style: solid; border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .when { font-size: 13px; color: var(--ok); font-weight: 600; margin: -8px 0 10px; }
+
+/* ---- A friendlier My jobs: greeting, fit meter, gentle motion, phone layout ---- */
+.hello h1 { font-size: 30px; }
+.hello .today { color: var(--ok); font-weight: 700; }
+
+.job { position: relative; border-left: 4px solid var(--border); }
+.job.fit-strong { border-left-color: var(--ok); }
+.job.fit-good { border-left-color: var(--accent); }
+.job.fit-weak { border-left-color: color-mix(in srgb, var(--muted) 45%, transparent); }
+
+.meter { height: 6px; border-radius: 999px; margin: 2px 0 10px; overflow: hidden;
+  background: color-mix(in srgb, var(--muted) 14%, transparent); }
+.meter span { display: block; height: 100%; border-radius: inherit; }
+.meter-strong span { background: var(--ok); }
+.meter-good span { background: var(--accent); }
+.meter-weak span { background: color-mix(in srgb, var(--muted) 55%, transparent); }
+.fit .pct { font-weight: 700; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .card, button, .tabs a, .chips a, .topnav a {
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease,
+      background-color .15s ease, color .15s ease; }
+  .job:hover { transform: translateY(-2px);
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--ink) 10%, transparent); }
+  button:active { transform: scale(.97); }
+  .meter span { animation: grow .6s ease-out both; transform-origin: left; }
+  @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+}
+
+@media (max-width: 560px) {
+  .hello h1 { font-size: 24px; }
+  .tabs, .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    margin-left: -16px; margin-right: -16px; padding: 2px 16px; }
+  .tabs::-webkit-scrollbar, .chips::-webkit-scrollbar { display: none; }
+  .tabs a, .chips a { flex: 0 0 auto; }
+  .actions button, .actions a { min-height: 40px; }
+  .actions { gap: 8px 12px; }
+  .card { padding: 16px; }
+}
