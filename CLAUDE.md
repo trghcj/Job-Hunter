@@ -25,6 +25,9 @@ Daily run: GitHub Actions. LLM via an LLMClient interface (Gemini default).
   store or log the uploaded PDF. Gemini (llm/) reviews only users who turned it on, at most
   10 jobs in one call per user per run, never with the profile's first line; job text is
   untrusted and replies are validated (llm.client.parse_reviews).
+- Email action links (actions.py) are signed with a key derived from SETTINGS_KEY, expire
+  after 30 days and act on one job for one user; GET /a/{token} never changes data (the page
+  POSTs). Avoid lists (avoid.py) are per user and always visible and removable on Settings.
 - The Gmail app password is stored only encrypted (crypto.py, SETTINGS_KEY) and is never
   shown on a page, logged, or included in an error message.
 - Respect rate limits: Adzuna max 250 calls/day, Resend max 100 emails/day. Count calls in the database.
