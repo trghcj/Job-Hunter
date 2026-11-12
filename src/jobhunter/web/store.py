@@ -12,12 +12,14 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from jobhunter import accounts, extension_tokens, profile
+from jobhunter import avoid as avoid_lists
+from jobhunter.avoid import Avoid
 from jobhunter.crypto import CryptoError
-from jobhunter.db import Run, SearchProfile
+from jobhunter.db import Job, Run, SearchProfile
 from jobhunter.extension_tokens import TokenRow
 from jobhunter.mail_account import MailView, delete_account, gmail_adapter, mail_view, save_account
 from jobhunter.matching.fit import LEVEL_MIN
-from jobhunter.pipeline import refilter_for_user
+from jobhunter.pipeline import refilter_for_user, visible_to
 from jobhunter.sources.catalog import SOURCE_LABELS, is_enabled
 from jobhunter.sources.gmail_alerts import GmailError
 from jobhunter.sources.watchlist import Company, companies_from_setting, companies_to_setting
@@ -34,6 +36,20 @@ from jobhunter.web.forms import ProfileForm
 
 DEFAULT_MAX_JOBS = 25
 DEFAULT_MAX_AGE_DAYS = 14
+
+
+def rescore_user(session: Session, user_id: int) -> None:
+    """Re-filter and re-score one user's recent jobs now, so a change shows at once."""
+    searches = load_active_searches(session, user_id)
+    if any(s.titles for s in searches):
+        max_age = int(get_user_setting(session, user_id, "max_age_days", DEFAULT_MAX_AGE_DAYS))
+        refilter_for_user(session, user_id, searches, datetime.now(UTC), max_age)
+
+
+@dataclass(frozen=True)
+class JobBrief:
+    title: str
+    company: str
 
 
 @dataclass(frozen=True)
@@ -68,6 +84,10 @@ class SettingsStore(Protocol):
     def tokens(self) -> list[TokenRow]: ...
     def create_token(self, label: str) -> str: ...
     def revoke_token(self, token_id: int) -> bool: ...
+    def load_avoid(self) -> Avoid: ...
+    def reasons_for(self, job_id: int) -> tuple[JobBrief | None, list[str]]: ...
+    def add_reason(self, job_id: int, reason: str) -> bool: ...
+    def remove_avoid(self, kind: str, value: str) -> bool: ...
     def load_profile(self) -> ProfileView: ...
     def save_profile_text(self, text: str) -> None: ...
     def upload_resume(self, data: bytes) -> None: ...
@@ -102,11 +122,44 @@ class UserStore:
     # ---- profile (resume text); saving it re-scores this user's jobs at once
 
     def _rescore(self, session: Session) -> None:
-        searches = load_active_searches(session, self.user_id)
-        if any(s.titles for s in searches):
-            max_age = int(get_user_setting(session, self.user_id, "max_age_days",
-                                           DEFAULT_MAX_AGE_DAYS))
-            refilter_for_user(session, self.user_id, searches, datetime.now(UTC), max_age)
+        rescore_user(session, self.user_id)
+
+    # ---- avoid lists ("Not interested" reasons); each change re-scores at once
+
+    def _visible_job(self, session: Session, job_id: int) -> Job | None:
+        return session.scalar(select(Job).where(Job.id == job_id, visible_to(self.user_id)))
+
+    def _profile_skills(self, session: Session) -> set[str]:
+        saved = profile.load_profile(session, self.user_id)
+        return set(saved.skills) if saved else set()
+
+    def load_avoid(self) -> Avoid:
+        with self._sessions() as session:
+            return avoid_lists.load_avoid(session, self.user_id)
+
+    def reasons_for(self, job_id: int) -> tuple[JobBrief | None, list[str]]:
+        with self._sessions() as session:
+            job = self._visible_job(session, job_id)
+            if job is None:
+                return None, []
+            return (JobBrief(job.title, job.company),
+                    avoid_lists.reason_options(job, self._profile_skills(session)))
+
+    def add_reason(self, job_id: int, reason: str) -> bool:
+        with self._sessions() as session:
+            job = self._visible_job(session, job_id)
+            added = job is not None and avoid_lists.add_reason(
+                session, self.user_id, job, reason, self._profile_skills(session))
+            if added:
+                self._rescore(session)
+            return added
+
+    def remove_avoid(self, kind: str, value: str) -> bool:
+        with self._sessions() as session:
+            removed = avoid_lists.remove_entry(session, self.user_id, kind, value)
+            if removed:
+                self._rescore(session)
+            return removed
 
     def load_profile(self) -> ProfileView:
         with self._sessions() as session:

@@ -21,12 +21,15 @@ from sqlalchemy.orm import Session, sessionmaker
 from starlette.middleware.sessions import SessionMiddleware
 
 from jobhunter.accounts import Access, Identity, SignIn, email_set
+from jobhunter.actions import ACTIONS, Action, TokenInvalid, action_key, read_token
+from jobhunter.avoid import REASONS
 from jobhunter.extension_tokens import label_from_user_agent
 from jobhunter.notify.email_resend import IST
 from jobhunter.profile import MAX_PDF_BYTES, ProfileError
 from jobhunter.settings import Settings, get_settings
 from jobhunter.sources.catalog import SOURCE_LABELS
 from jobhunter.sources.watchlist import format_watchlist
+from jobhunter.web.actions_store import DbActions, JobBrief
 from jobhunter.web.api import ApiGateway, DbApi, RateLimiter, api_router
 from jobhunter.web.firebase_auth import FirebaseVerifier, TokenError
 from jobhunter.web.forms import WORK_MODES, parse_admin_form, parse_form, parse_gmail_form
@@ -52,6 +55,11 @@ def ist(value: datetime | None, fmt: str, missing: str = "") -> str:
 
 TEMPLATES.env.filters["ist"] = ist
 SESSION_DAYS = 30
+AVOID_GROUPS = (("companies", "Hidden companies"), ("cities", "Hidden cities"),
+                ("skills", "Lowered skills"), ("titles", "Lowered roles"))
+LINK_EXPIRED = "This link has expired, open My jobs instead."
+ACTION_DONE = {"save": "Saved ✓", "applied": "Marked as applied ✓",
+               "not_interested": "Hidden ✓"}
 FIT_CHOICES = (("strong", "Strong fits only"), ("good", "Good and strong"),
                ("all", "Everything that passed"))
 PROFILE_NOTICES = {
@@ -98,6 +106,12 @@ class AdminView(Protocol):
     def save_sources_and_watchlist(self, enabled: dict[str, bool], watchlist: list) -> None: ...
     def users(self) -> list: ...
     def set_blocked(self, user_id: int, blocked: bool) -> None: ...
+
+
+class ActionGateway(Protocol):
+    def apply(self, user_id: int, job_id: int, status: str) -> JobBrief | None: ...
+    def reasons_for(self, user_id: int, job_id: int) -> list[str]: ...
+    def add_reason(self, user_id: int, job_id: int, reason: str) -> bool: ...
 
 
 class TokenVerifier(Protocol):
@@ -165,6 +179,7 @@ def create_app(
     verifier: TokenVerifier | None = None,
     accounts: AccountsGateway | None = None,
     settings: Settings | None = None,
+    actions: ActionGateway | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     secret = settings.session_secret.get_secret_value()
@@ -172,7 +187,7 @@ def create_app(
         raise RuntimeError("Set SESSION_SECRET (32+ random characters) to start.")
     missing = [f.upper() for f in FIREBASE_FIELDS if not getattr(settings, f)]
 
-    if None in (store_factory, accounts, jobs_store, admin_store, api):
+    if None in (store_factory, accounts, jobs_store, admin_store, api, actions):
         from jobhunter.db import make_engine
 
         sessions = sessionmaker(make_engine())
@@ -184,6 +199,7 @@ def create_app(
         jobs_store = jobs_store or JobsStore(sessions)
         admin_store = admin_store or AdminStore(sessions)
         api = api or DbApi(sessions, access)
+        actions = actions or DbActions(sessions, access)
     if verifier is None and not missing:
         verifier = FirebaseVerifier(settings.firebase_project_id)
 
@@ -204,7 +220,7 @@ def create_app(
     async def security_headers(request: Request, call_next):
         response: Response = await call_next(request)
         response.headers.update(SECURITY_HEADERS)
-        if request.url.path.startswith("/extension/connect"):
+        if request.url.path.startswith(("/extension/connect", "/a/")):
             response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Content-Security-Policy"] = (
             login_csp if request.url.path == "/login" else BASE_CSP)
@@ -231,6 +247,60 @@ def create_app(
             request.session.clear()
             return None, _see_other("/invite-only")
         return user, None
+
+    # ---- one-click links from the daily email (no sign-in; the signed token authorises)
+
+    settings_key = settings.settings_key.get_secret_value()
+    link_key = action_key(settings_key) if settings_key else None
+
+    def action_page(request: Request, mode: str, status: int = 200, **ctx):
+        response = TEMPLATES.TemplateResponse(request, "action.html", {"mode": mode, **ctx},
+                                              status_code=status)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    def read_link(token: str) -> Action | None:
+        if link_key is None:
+            return None
+        try:
+            return read_token(link_key, token)
+        except TokenInvalid:
+            return None
+
+    def expired(request: Request):
+        return action_page(request, "expired", status=400, heading="Link expired",
+                           text=LINK_EXPIRED)
+
+    @app.get("/a/{token}", response_class=HTMLResponse)
+    def action_confirm(request: Request, token: str):
+        if read_link(token) is None:
+            return expired(request)
+        return action_page(request, "confirm", heading="One moment", token=token)
+
+    @app.post("/a/{token}")
+    async def action_apply(request: Request, token: str):
+        link = read_link(token)
+        form = await request.form()
+        if link is None or form.get("confirm") != "1":
+            return expired(request)
+        job = actions.apply(link.user_id, link.job_id, ACTIONS[link.action])
+        if job is None:
+            return expired(request)
+        reasons = []
+        if link.action == "not_interested":
+            reasons = [(r, REASONS[r]) for r in actions.reasons_for(link.user_id, link.job_id)]
+        return action_page(request, "done", heading=ACTION_DONE[link.action], job=job,
+                           reason_url=f"/a/{token}/reason", reasons=reasons)
+
+    @app.post("/a/{token}/reason")
+    async def action_reason(request: Request, token: str):
+        link = read_link(token)
+        form = await request.form()
+        reason = str(form.get("reason", ""))
+        if link is None or link.action != "not_interested" or reason not in REASONS:
+            return expired(request)
+        actions.add_reason(link.user_id, link.job_id, reason)
+        return action_page(request, "reason", heading="Got it")
 
     @app.get("/healthz")
     def healthz() -> dict[str, bool]:
@@ -319,6 +389,41 @@ def create_app(
         tab = str(data.get("tab", "matches"))
         return _see_other(f"/?tab={tab if tab in TABS else 'matches'}")
 
+    # ---- "Not interested" on My jobs, with the same optional reasons as the email
+
+    @app.post("/jobs/{job_id}/not-interested")
+    async def not_interested(request: Request, job_id: int):
+        user, _, early = await _checked_form(request)
+        if early:
+            return early
+        if not jobs_store.set_status(user.id, job_id, "hidden"):
+            return Response("Job not found.", status_code=404)
+        job, reasons = store_factory(user.id).reasons_for(job_id)
+        if job is None:
+            return Response("Job not found.", status_code=404)
+        return TEMPLATES.TemplateResponse(request, "action.html", {
+            "mode": "done", "heading": ACTION_DONE["not_interested"], "job": job,
+            "user": user, "csrf": _csrf(request), "reason_url": f"/jobs/{job_id}/reason",
+            "reasons": [(r, REASONS[r]) for r in reasons]})
+
+    @app.post("/jobs/{job_id}/reason")
+    async def job_reason(request: Request, job_id: int):
+        user, data, early = await _checked_form(request)
+        if early:
+            return early
+        store_factory(user.id).add_reason(job_id, str(data.get("reason", "")))
+        return TEMPLATES.TemplateResponse(request, "action.html", {
+            "mode": "reason", "heading": "Got it", "user": user})
+
+    @app.post("/avoid/remove")
+    async def remove_avoid(request: Request):
+        user, data, early = await _checked_form(request)
+        if early:
+            return early
+        store_factory(user.id).remove_avoid(str(data.get("kind", "")),
+                                            str(data.get("value", "")))
+        return _see_other("/settings#avoid")
+
     # ---- settings (per user)
 
     def render_settings(request: Request, user: UserInfo, store: SettingsStore, form,
@@ -342,6 +447,8 @@ def create_app(
             "profile_errors": list(profile_errors),
             "profile_message": profile_message,
             "fit_choices": FIT_CHOICES,
+            "avoid": store.load_avoid(),
+            "avoid_groups": AVOID_GROUPS,
         }
         return TEMPLATES.TemplateResponse(request, "settings.html", ctx, status_code=status)
 

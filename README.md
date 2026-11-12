@@ -53,6 +53,21 @@ Each match shows its level and a reason such as *Matches Python, Django, SQL · 
 
 **Gemini review (optional, off by default).** Tick *Let Gemini review my top 10 jobs each day* and the daily run sends your profile text (without contact details or its first line, usually your name) and your 10 best new jobs to Google's Gemini in one call. Gemini rates each 1–5 with a short reason; the final score becomes half the local score and half Gemini's rating, and its reason replaces the local one. If Gemini fails or `GEMINI_API_KEY` is not set, the local scores stay and the run carries on. After the update, run `python -m jobhunter rescore` once to find skills in jobs saved earlier.
 
+### Email actions and "Not interested"
+
+Each job in the daily email has **Save**, **Applied** and **Not interested** links that work with one tap, without signing in. A link carries a signed code for that one user, job and action (key derived from `SETTINGS_KEY`), expires after 30 days, and never signs anyone in. Opening it changes nothing by itself: the page then records the action in your browser, so email link scanners cannot trigger it. On My jobs the same **Not interested** button is next to Save and Applied.
+
+After **Not interested** you can pick an optional reason:
+
+| Reason | Effect |
+|---|---|
+| Don't like this company | Jobs from that company are hidden (Pvt, Ltd and similar endings ignored). |
+| Wrong skills | The job's skills you don't have are lowered: −0.1 each in later jobs, at most −0.3. |
+| Wrong location | Non-remote jobs in that city are hidden. |
+| Not my kind of role | Jobs with the same title rank 0.2 lower. |
+
+Lowered jobs say why ("Lowered: you avoid AWS"). Everything is listed under **Settings → Hidden and lowered**, where **Remove** undoes it. Links point to `PUBLIC_URL` (default `https://jobhunter-settings.onrender.com`).
+
 ### Sources
 
 | Source | How it is read | Notes |
@@ -224,5 +239,5 @@ Tests make no network calls: API responses are replayed from `tests/fixtures/`, 
 | A | Done | Google sign-in for many users, per-user settings and Gmail, My jobs page, owner Admin page, new marigold look and logo |
 | B | Done | Chrome bubble extension: on the job you open on LinkedIn, Naukri, Indeed or a careers site (no automatic browsing), shows whether it matches your filters, saves it to My jobs, lists your latest matches and marks jobs you have seen |
 | 4 | Done | Fit score from your resume (skills and title), Strong/Good/Weak levels with reasons, digest fit choice, optional Gemini review of your top 10 a day |
-| 5 | Planned | Applied / Not interested / Save links in the email; rejections lower similar jobs |
+| 5 | Done | One-click Save / Applied / Not interested links in the email; optional reasons hide or lower similar jobs, undoable on Settings |
 | 6 | Planned | Optional resume and cover-letter drafts (the job list and status pages arrived with accounts) |

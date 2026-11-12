@@ -5,8 +5,10 @@ import pytest
 pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
+from jobhunter.avoid import Avoid  # noqa: E402
 from jobhunter.mail_account import MailView  # noqa: E402
 from jobhunter.profile import ProfileError  # noqa: E402
+from jobhunter.web.actions_store import JobBrief  # noqa: E402
 from jobhunter.web.app import create_app  # noqa: E402
 from jobhunter.web.forms import ProfileForm  # noqa: E402
 from jobhunter.web.store import ProfileView, RunRow  # noqa: E402
@@ -90,6 +92,27 @@ class FakeStore:
         if not data.startswith(b"%PDF-"):
             raise ProfileError("Upload a PDF file, or paste your resume text instead.")
         self.profile = replace(self.profile, text="Text from the PDF")
+
+    # ---- avoid lists ("Not interested" reasons)
+    avoid = Avoid()
+    avoid_reasons: list = []
+
+    def load_avoid(self):
+        return self.avoid
+
+    def reasons_for(self, job_id):
+        if job_id not in (1, 2):
+            return None, []
+        return JobBrief("Backend Engineer", "Acme"), ["company", "skills", "role"]
+
+    def add_reason(self, job_id, reason):
+        self.avoid_reasons = self.avoid_reasons + [(job_id, reason)]
+        return True
+
+    def remove_avoid(self, kind, value):
+        current = getattr(self.avoid, kind)
+        self.avoid = replace(self.avoid, **{kind: tuple(v for v in current if v != value)})
+        return True
 
     def save_profile_options(self, llm_review, digest_fit):
         if digest_fit not in ("strong", "good", "all"):

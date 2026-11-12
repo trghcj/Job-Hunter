@@ -88,11 +88,28 @@ def _email_sender(session: Session):
     return ResendSender(key, from_addr)
 
 
+def _action_links(settings, user_id: int):
+    """Signed Save / Applied / Not interested links for this user's digest, or None when
+    SETTINGS_KEY or PUBLIC_URL is missing (the email is then sent without them)."""
+    key, base = settings.settings_key.get_secret_value(), settings.public_url
+    if not key or not base:
+        return None
+    from jobhunter.actions import ACTIONS, action_key, action_url, make_token
+
+    signing = action_key(key)
+
+    def links(job_id: int) -> dict[str, str]:
+        return {a: action_url(base, make_token(signing, user_id, job_id, a)) for a in ACTIONS}
+
+    return links
+
+
 def _deliver(session: Session, user_id: int, digest, now, run_source: str = "email"):
     from jobhunter.db import Run
     from jobhunter.notify import email_resend
     from jobhunter.notify.email_resend import DeliveryResult, deliver_digest
     from jobhunter.pipeline import mark_emailed
+    from jobhunter.settings import get_settings
     from jobhunter.usage import DbBudget
 
     sender = _email_sender(session)
@@ -104,6 +121,7 @@ def _deliver(session: Session, user_id: int, digest, now, run_source: str = "ema
         result = deliver_digest(
             digest, sender, _recipients(session, user_id), budget, now,
             mark=lambda ids: mark_emailed(session, user_id, ids, now),
+            links=_action_links(get_settings(), user_id),
         )
     session.add(Run(
         source=run_source, started_at=now, finished_at=datetime.now(UTC),

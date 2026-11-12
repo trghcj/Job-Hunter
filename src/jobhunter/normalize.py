@@ -131,6 +131,9 @@ def _company_key(company: str) -> str:
     return " ".join(words)
 
 
+company_key = _company_key  # public name: avoid lists compare companies the same way
+
+
 def make_dedupe_key(company: str, title: str, city: str | None) -> str:
     parts = (_company_key(company), _clean(title).lower(), _clean(city).lower())
     return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()

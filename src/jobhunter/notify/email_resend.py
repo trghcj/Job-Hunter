@@ -72,7 +72,20 @@ def _fit_html(job: DigestJob) -> str:
             f"{html.escape(job.reason)}</div>")
 
 
-def _job_html(job: DigestJob, now: datetime) -> str:
+ActionLinks = Callable[[int], dict[str, str]]  # job id -> {"save"|"applied"|"not_interested": url}
+LINK_LABELS = (("save", "Save"), ("applied", "Applied"), ("not_interested", "Not interested"))
+
+
+def _links_html(urls: dict[str, str] | None) -> str:
+    if not urls:
+        return ""
+    links = " · ".join(
+        f'<a href="{html.escape(urls[key])}" style="color:#8F5A12">{label}</a>'
+        for key, label in LINK_LABELS if key in urls)
+    return f'<div style="font-size:13px;margin-top:6px">{links}</div>'
+
+
+def _job_html(job: DigestJob, now: datetime, urls: dict[str, str] | None = None) -> str:
     e = html.escape
     title = e(job.title)
     url = _safe_url(job.url)
@@ -87,25 +100,31 @@ def _job_html(job: DigestJob, now: datetime) -> str:
         f"{_fit_html(job)}"
         f'<div style="font-size:12px;color:#9ca3af;margin-top:2px">'
         f"{'' if _fit_label(job) else f'score {job.score:.2f} · '}via {e(job.source)}</div>"
+        f"{_links_html(urls)}"
         "</td></tr>"
     )
 
 
-def _job_text(job: DigestJob, now: datetime) -> str:
+def _job_text(job: DigestJob, now: datetime, urls: dict[str, str] | None = None) -> str:
     lines = [f"{job.title} — {job.company}", "  " + " · ".join(_details(job, now))]
     if label := _fit_label(job):
         lines.append(f"  {label} · {job.reason}")
     if url := _safe_url(job.url):
         lines.append(f"  {url}")
+    for key, label in LINK_LABELS:
+        if urls and key in urls:
+            lines.append(f"  {label}: {urls[key]}")
     return "\n".join(lines)
 
 
-def build_digest(jobs: Sequence[DigestJob], now: datetime) -> tuple[str, str, str]:
-    """(subject, html, text)."""
+def build_digest(jobs: Sequence[DigestJob], now: datetime,
+                 links: ActionLinks | None = None) -> tuple[str, str, str]:
+    """(subject, html, text). With `links`, each job gets Save / Applied / Not interested."""
+    urls = {j.job_id: links(j.job_id) for j in jobs} if links else {}
     today = now.astimezone(IST)
     noun = "job" if len(jobs) == 1 else "jobs"
     subject = f"JobHunter: {len(jobs)} new {noun} · {today.day} {today:%b}"
-    rows = "".join(_job_html(j, now) for j in jobs)
+    rows = "".join(_job_html(j, now, urls.get(j.job_id)) for j in jobs)
     html_body = (
         '<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;'
         'color:#111827">'
@@ -114,7 +133,8 @@ def build_digest(jobs: Sequence[DigestJob], now: datetime) -> tuple[str, str, st
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">{rows}</table>'
         "</div>"
     )
-    text_body = subject + "\n\n" + "\n\n".join(_job_text(j, now) for j in jobs)
+    text_body = subject + "\n\n" + "\n\n".join(_job_text(j, now, urls.get(j.job_id))
+                                              for j in jobs)
     return subject, html_body, text_body
 
 
@@ -163,6 +183,7 @@ def deliver_digest(
     budget: CallBudget,
     now: datetime,
     mark: Callable[[list[int]], None] | None,
+    links: ActionLinks | None = None,
 ) -> DeliveryResult:
     """Send the digest if there is anything new; mark jobs emailed only on success."""
     if not jobs:
@@ -172,7 +193,7 @@ def deliver_digest(
                               "`python -m jobhunter set-email you@example.com`")
     if not budget.try_spend(PROVIDER):
         return DeliveryResult(False, error="Resend email limit reached for today")
-    subject, html_body, text_body = build_digest(jobs, now)
+    subject, html_body, text_body = build_digest(jobs, now, links)
     try:
         message_id = sender.send(to, subject, html_body, text_body)
     except ResendError as exc:

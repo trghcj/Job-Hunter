@@ -46,16 +46,20 @@
   <p class="fit"><span class="badge fit-{{ c.level }}">{{ c.level|capitalize }} fit</span> {{ c.reason }}</p>
   {% endif %}
   <div class="actions">
-    {% for value, label in (("saved", "Save"), ("applied", "Applied"), ("hidden", "Hide")) %}
+    {% for value, label in (("saved", "Save"), ("applied", "Applied")) %}
     {% if c.status != value %}
     <form method="post" action="/jobs/{{ c.job_id }}/status">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <input type="hidden" name="tab" value="{{ tab }}">
       <input type="hidden" name="status" value="{{ value }}">
-      <button type="submit" class="{{ 'link' if value == 'hidden' else 'secondary' }}">{{ label }}</button>
+      <button type="submit" class="secondary">{{ label }}</button>
     </form>
     {% endif %}
     {% endfor %}
+    <form method="post" action="/jobs/{{ c.job_id }}/not-interested">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button type="submit" class="link">Not interested</button>
+    </form>
   </div>
 </article>
 {% endfor %}
