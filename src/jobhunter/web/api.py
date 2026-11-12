@@ -18,8 +18,10 @@ from sqlalchemy import and_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from jobhunter.accounts import Access
+from jobhunter.avoid import Avoid, load_avoid
 from jobhunter.db import Job, JobScore, JobStatus, User
 from jobhunter.extension_tokens import hash_token, user_for_token
+from jobhunter.matching.filters import title_score
 from jobhunter.matching.fit import local_fit
 from jobhunter.models import RawJob
 from jobhunter.normalize import normalize_job
@@ -150,13 +152,14 @@ class DbApi:
                 return CheckResult("no_match", [NO_TITLES], seen)
             max_age = int(get_user_setting(session, user_id, "max_age_days",
                                            DEFAULT_MAX_AGE_DAYS))
-            result = best_result(job, searches, datetime.now(UTC), max_age)
-            fit = self._fit(session, user_id, job, result) if result.passed else None
+            avoid = load_avoid(session, user_id)
+            result = best_result(job, searches, datetime.now(UTC), max_age, avoid)
+            fit = self._fit(session, user_id, job, result, avoid) if result.passed else None
         if result.passed:
             return CheckResult("match", [], seen, fit)
         return CheckResult("no_match", [result.reason] if result.reason else [], seen)
 
-    def _fit(self, session: Session, user_id: int, job, result) -> dict | None:
+    def _fit(self, session: Session, user_id: int, job, result, avoid: Avoid) -> dict | None:
         profile = load_profile(session, user_id)
         if profile is None:
             return None
@@ -167,8 +170,11 @@ class DbApi:
         else:  # not fetched by JobHunter yet: read the page's own text
             cols = job_skill_columns(job.raw.title, job.raw.description)
             skills, title_skills = cols["skills"], cols["title_skills"]
+        rejected_role = (bool(avoid.titles)
+                         and title_score(job.raw.title, list(avoid.titles)) == 1.0)
         fit = local_fit(set(skills), set(title_skills), set(profile.skills), result.title_score,
-                        result.experience_unstated, result.remote_unconfirmed)
+                        result.experience_unstated, result.remote_unconfirmed,
+                        avoid_skills=set(avoid.skills), rejected_role=rejected_role)
         return {"level": fit.level, "score": fit.score, "reason": fit.reason}
 
     def save(self, user_id: int, req: SaveRequest) -> int:

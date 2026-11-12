@@ -6,7 +6,7 @@ one row in `runs`; a failing source never stops the others.
 
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
@@ -14,8 +14,14 @@ from sqlalchemy import ColumnElement, Select, and_, func, literal_column, or_, s
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from jobhunter.avoid import Avoid, load_avoid
 from jobhunter.db import Job, JobOwner, JobScore, JobStatus, Run
-from jobhunter.matching.filters import DEFAULT_MAX_AGE_DAYS, FilterResult, apply_filters
+from jobhunter.matching.filters import (
+    DEFAULT_MAX_AGE_DAYS,
+    FilterResult,
+    apply_filters,
+    title_score,
+)
 from jobhunter.matching.fit import LEVEL_MIN, blend, level_of, local_fit
 from jobhunter.matching.skills import extract_skills
 from jobhunter.models import RawJob
@@ -243,14 +249,21 @@ def _row_to_normalized(row: Job) -> NormalizedJob:
 
 
 def best_result(
-    job: NormalizedJob, searches: list[Search], now: datetime, max_age_days: int
+    job: NormalizedJob, searches: list[Search], now: datetime, max_age_days: int,
+    avoid: Avoid | None = None,
 ) -> FilterResult:
-    """A job passes if any active profile accepts it; otherwise report the closest miss."""
+    """A job passes if any active profile accepts it and the user does not avoid its company
+    or city; otherwise report the closest miss."""
     results = [apply_filters(job, s, now=now, max_age_days=max_age_days) for s in searches]
     passed = [r for r in results if r.passed]
-    if passed:
-        return max(passed, key=provisional_score)
-    return max(results, key=lambda r: r.title_score)
+    if not passed:
+        return max(results, key=lambda r: r.title_score)
+    best = max(passed, key=provisional_score)
+    if avoid and avoid.avoids_company(job.raw.company):
+        return replace(best, passed=False, reason="you avoid this company")
+    if avoid and (city := avoid.avoided_city(job.city, job.work_mode)):
+        return replace(best, passed=False, reason=f"you avoid {city}")
+    return best
 
 
 def visible_to(user_id: int) -> ColumnElement[bool]:
@@ -283,7 +296,7 @@ def _reviews(session: Session, user_id: int) -> dict[int, tuple[int, str | None]
 
 
 def _scored(job: Job, result: FilterResult, profile_skills: set[str] | None,
-            review: tuple[int, str | None] | None) -> dict:
+            review: tuple[int, str | None] | None, avoid: Avoid) -> dict:
     """final_score, skill_score and fit_reason for a job that passed the filters."""
     if profile_skills is None:
         return {"final_score": provisional_score(result), "skill_score": None,
@@ -293,8 +306,10 @@ def _scored(job: Job, result: FilterResult, profile_skills: set[str] | None,
         skills, title_skills = cols["skills"], cols["title_skills"]
     else:
         skills, title_skills = job.skills, job.title_skills or []
+    rejected_role = bool(avoid.titles) and title_score(job.title, list(avoid.titles)) == 1.0
     fit = local_fit(set(skills), set(title_skills), profile_skills, result.title_score,
-                    result.experience_unstated, result.remote_unconfirmed)
+                    result.experience_unstated, result.remote_unconfirmed,
+                    avoid_skills=set(avoid.skills), rejected_role=rejected_role)
     if review is None:
         return {"final_score": fit.score, "skill_score": fit.skill, "fit_reason": fit.reason}
     llm_fit, llm_reason = review
@@ -312,10 +327,12 @@ def refilter_for_user(
     profile = load_profile(session, user_id)
     profile_skills = set(profile.skills) if profile else None
     reviews = _reviews(session, user_id) if profile else {}
+    avoid = load_avoid(session, user_id)
     rows = []
     for job in session.scalars(stmt):
-        result = best_result(_row_to_normalized(job), searches, now, max_age_days)
-        scored = (_scored(job, result, profile_skills, reviews.get(job.id)) if result.passed
+        result = best_result(_row_to_normalized(job), searches, now, max_age_days, avoid)
+        scored = (_scored(job, result, profile_skills, reviews.get(job.id), avoid)
+                  if result.passed
                   else {"final_score": None, "skill_score": None, "fit_reason": None})
         rows.append({
             "user_id": user_id,
