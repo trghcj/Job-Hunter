@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from jobhunter.db import SearchProfile, connect_with_retry, make_engine
+from jobhunter.settings import get_settings
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 log = logging.getLogger("jobhunter")
@@ -374,6 +375,22 @@ def cmd_rescore(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_make_owner(args: argparse.Namespace) -> int:
+    """Make your signed-in account (OWNER_EMAIL) the owner if the placeholder was never
+    claimed. Shows what would change unless --apply is given."""
+    from jobhunter.accounts import make_owner
+
+    with _session() as session:
+        fix = make_owner(session, get_settings().owner_email, apply=args.apply)
+    if not fix.ok:
+        print(fix.message, file=sys.stderr)
+        return 1
+    print(f"Your account {fix.user_id} gets {fix.emailed_marks} emailed marks and "
+          f"{fix.private_jobs} private jobs from the owner placeholder, which is then deleted.")
+    print(fix.message)
+    return 0
+
+
 def cmd_not_yet(args: argparse.Namespace) -> int:
     print(f"'{args.command}' is not implemented yet (see the roadmap).", file=sys.stderr)
     return 2
@@ -405,6 +422,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub.add_parser("rescore", help="find skills in older jobs and re-score everyone").set_defaults(
         func=cmd_rescore)
+    owner = sub.add_parser("make-owner", help="make your account (OWNER_EMAIL) the owner")
+    owner.add_argument("--apply", action="store_true", help="make the change (default: preview)")
+    owner.set_defaults(func=cmd_make_owner)
     sub.add_parser("backfill").set_defaults(func=cmd_not_yet)
     args = parser.parse_args(argv)
     return args.func(args)

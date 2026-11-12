@@ -182,6 +182,7 @@ Running `run` twice sends the digest once; the second run reports `no new jobs, 
 | `set-email ADDRESS...` | Sets the digest recipients. |
 | `test-email` | Sends a one-job sample digest. |
 | `heartbeat` | Sends the weekly summary now. |
+| `make-owner [--apply]` | If you first signed in before `OWNER_EMAIL` was set, makes that account the owner: keeps the placeholder's emailed marks, private jobs and missing settings, then deletes the placeholder. Shows what would change unless `--apply` is given. |
 
 ## Web app
 

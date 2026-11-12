@@ -9,10 +9,19 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, literal, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from jobhunter.db import OWNER_PLACEHOLDER_ID, MailAccount, SearchProfile, User
+from jobhunter.db import (
+    OWNER_PLACEHOLDER_ID,
+    JobOwner,
+    JobStatus,
+    MailAccount,
+    SearchProfile,
+    User,
+    UserSetting,
+)
 
 MAX_USERS = 50
 
@@ -161,3 +170,76 @@ def list_users(session: Session) -> list[UserRow]:
                 int(t), bool(g))
         for u, t, g in session.execute(stmt)
     ]
+
+
+# ---- make-owner: repair an owner placeholder that was never claimed
+
+@dataclass(frozen=True)
+class OwnerFix:
+    ok: bool
+    message: str
+    user_id: int | None = None
+    emailed_marks: int = 0
+    private_jobs: int = 0
+    applied: bool = False
+
+
+def _owner_candidate(session: Session, owner_email: str) -> tuple[User | None, str]:
+    if not owner_email.strip():
+        return None, "Set OWNER_EMAIL first."
+    placeholder = session.get(User, OWNER_PLACEHOLDER_ID)
+    if placeholder is None or placeholder.firebase_uid is not None:
+        return None, "The owner account is already signed in; nothing to fix."
+    found = session.scalars(select(User).where(
+        func.lower(User.email) == owner_email.strip().lower(),
+        User.firebase_uid.is_not(None), User.id != OWNER_PLACEHOLDER_ID)).all()
+    if not found:
+        return None, "No account uses OWNER_EMAIL yet; sign in on the website first."
+    if len(found) > 1:
+        return None, "More than one account uses OWNER_EMAIL; fix this by hand."
+    return found[0], ""
+
+
+def _move_history(session: Session, user_id: int) -> None:
+    """Copy the placeholder's emailed marks, private jobs and missing settings to user_id;
+    the user's own statuses and settings win."""
+    old = OWNER_PLACEHOLDER_ID
+    marks = insert(JobStatus).from_select(
+        ["user_id", "job_id", "emailed_at", "status", "notes"],
+        select(literal(user_id), JobStatus.job_id, JobStatus.emailed_at, JobStatus.status,
+               JobStatus.notes).where(JobStatus.user_id == old))
+    session.execute(marks.on_conflict_do_update(
+        index_elements=[JobStatus.user_id, JobStatus.job_id],
+        set_={"emailed_at": func.coalesce(JobStatus.emailed_at, marks.excluded.emailed_at)}))
+    session.execute(insert(JobOwner).from_select(
+        ["job_id", "user_id"],
+        select(JobOwner.job_id, literal(user_id)).where(JobOwner.user_id == old),
+    ).on_conflict_do_nothing())
+    session.execute(insert(UserSetting).from_select(
+        ["user_id", "key", "value"],
+        select(literal(user_id), UserSetting.key, UserSetting.value)
+        .where(UserSetting.user_id == old),
+    ).on_conflict_do_nothing())
+
+
+def make_owner(session: Session, owner_email: str, apply: bool) -> OwnerFix:
+    """Make the signed-in account with OWNER_EMAIL the owner when an earlier sign-in (made
+    before OWNER_EMAIL was set) left the placeholder unclaimed. Keeps the placeholder's
+    emailed marks, private jobs and missing settings, then deletes it, all in one
+    transaction. With apply=False only counts what would change."""
+    user, problem = _owner_candidate(session, owner_email)
+    if user is None:
+        return OwnerFix(False, problem)
+    old = OWNER_PLACEHOLDER_ID
+    marks = session.scalar(select(func.count()).select_from(JobStatus).where(
+        JobStatus.user_id == old, JobStatus.emailed_at.is_not(None))) or 0
+    private = session.scalar(select(func.count()).select_from(JobOwner).where(
+        JobOwner.user_id == old)) or 0
+    if not apply:
+        return OwnerFix(True, "Preview only; run again with --apply.", user.id, marks, private)
+    _move_history(session, user.id)
+    session.execute(delete(User).where(User.id == old))
+    user.is_owner = True
+    session.commit()
+    return OwnerFix(True, "Done: your account is now the owner.", user.id, marks, private,
+                    applied=True)
