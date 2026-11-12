@@ -36,6 +36,14 @@ DEFAULT_MAX_JOBS = 25
 DEFAULT_MAX_AGE_DAYS = 14
 
 
+def rescore_user(session: Session, user_id: int) -> None:
+    """Re-filter and re-score one user's recent jobs now, so a change shows at once."""
+    searches = load_active_searches(session, user_id)
+    if any(s.titles for s in searches):
+        max_age = int(get_user_setting(session, user_id, "max_age_days", DEFAULT_MAX_AGE_DAYS))
+        refilter_for_user(session, user_id, searches, datetime.now(UTC), max_age)
+
+
 @dataclass(frozen=True)
 class ProfileView:
     """What the My profile card shows."""
@@ -102,11 +110,7 @@ class UserStore:
     # ---- profile (resume text); saving it re-scores this user's jobs at once
 
     def _rescore(self, session: Session) -> None:
-        searches = load_active_searches(session, self.user_id)
-        if any(s.titles for s in searches):
-            max_age = int(get_user_setting(session, self.user_id, "max_age_days",
-                                           DEFAULT_MAX_AGE_DAYS))
-            refilter_for_user(session, self.user_id, searches, datetime.now(UTC), max_age)
+        rescore_user(session, self.user_id)
 
     def load_profile(self) -> ProfileView:
         with self._sessions() as session:

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ heading }} · JobHunter{% endblock %}
+{% block body %}
+<div class="card signin action">
+  <img src="/static/logo.svg" alt="" width="56" height="56">
+  {% if mode == "confirm" %}
+  <h1>One moment…</h1>
+  {# Opening the link changes nothing: this form does, sent by act.js (or the button). #}
+  <form id="act-form" method="post" action="/a/{{ token }}">
+    <input type="hidden" name="confirm" value="1">
+    <p class="lede">Recording your choice.</p>
+    <p><button type="submit">Confirm</button></p>
+  </form>
+  <script src="/static/act.js"></script>
+  {% elif mode == "done" %}
+  <h1>{{ heading }}</h1>
+  <p class="lede">{{ job.title }} · {{ job.company }}</p>
+  {% if reasons %}
+  <p>Want fewer jobs like this? Pick a reason (optional):</p>
+  <div class="actions reasons">
+    {% for key, label in reasons %}
+    <form method="post" action="/a/{{ token }}/reason">
+      <input type="hidden" name="reason" value="{{ key }}">
+      <button type="submit" class="secondary">{{ label }}</button>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <p><a href="/">Open My jobs</a></p>
+  {% elif mode == "reason" %}
+  <h1>{{ heading }}</h1>
+  <p class="lede">Similar jobs will be hidden or lowered. You can undo this on Settings.</p>
+  <p><a href="/">Open My jobs</a> · <a href="/settings#avoid">Settings</a></p>
+  {% else %}
+  <h1>{{ heading }}</h1>
+  <p class="lede">{{ text }}</p>
+  <p><a href="/">Open My jobs</a></p>
+  {% endif %}
+</div>
+{% endblock %}
