@@ -193,3 +193,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--accent); }
 .draft-actions { margin-top: 12px; }
 .tips { margin: 0; padding-left: 22px; }
 .tips li { margin: 6px 0; }
+
+/* Send the digest from your own Gmail */
+.send-digest { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.send-digest .hint { margin: 4px 0 10px; }

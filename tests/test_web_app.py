@@ -59,6 +59,9 @@ class FakeStore:
     def delete_mail(self):
         self.mail = MailView()
 
+    def set_send_digest(self, on):
+        self.mail = replace(self.mail, send_digest=on)
+
     # ---- extension tokens
     def tokens(self):
         return list(self._tokens.values()) if hasattr(self, "_tokens") else []
@@ -298,3 +301,35 @@ def test_security_headers(client):
     r = client.get("/login")
     assert r.headers["X-Frame-Options"] == "DENY"
     assert "frame-ancestors 'none'" in r.headers["Content-Security-Policy"]
+
+
+# ---- sending the digest from your own Gmail
+
+def test_send_digest_checkbox_hidden_without_gmail(client):
+    login(client)
+    assert 'action="/gmail/digest"' not in client.get("/settings").text
+
+
+def test_send_digest_checkbox_off_by_default_then_saved(client, store):
+    store.mail = MailView("me@gmail.com", True)
+    token = login(client)
+    page = client.get("/settings").text
+    assert 'action="/gmail/digest"' in page and "Send my daily digest from this Gmail" in page
+    assert 'name="send_digest" value="1" checked' not in page
+    r = client.post("/gmail/digest", data={"csrf": token, "send_digest": "1"},
+                    follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/settings?gmail=digest#gmail"
+    assert store.mail.send_digest is True
+    page = client.get("/settings?gmail=digest").text
+    assert 'name="send_digest" value="1" checked' in page and "from your Gmail" in page
+    client.post("/gmail/digest", data={"csrf": token})
+    assert store.mail.send_digest is False
+
+
+def test_send_digest_needs_login_and_csrf(client, store):
+    r = client.post("/gmail/digest", data={"send_digest": "1"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/login"
+    login(client)
+    assert client.post("/gmail/digest", data={"csrf": "forged", "send_digest": "1"}
+                       ).status_code == 403
+    assert store.mail.send_digest is False
