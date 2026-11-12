@@ -242,12 +242,9 @@ def _ran_today(session: Session, now: datetime) -> bool:
 
 def _llm_client(settings):
     """Gemini for the daily review, or None when GEMINI_API_KEY is not set."""
-    key = settings.gemini_api_key.get_secret_value()
-    if not key:
-        return None
-    from jobhunter.llm.gemini import GeminiClient
+    from jobhunter.llm.gemini import client_from_settings
 
-    return GeminiClient(key, settings.gemini_model)
+    return client_from_settings(settings)
 
 
 def cmd_run(args: argparse.Namespace) -> int:

@@ -68,3 +68,9 @@ class GeminiClient:
             return response.json()["candidates"][0]["content"]["parts"][0]["text"]
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise LLMError("Gemini's answer had an unexpected shape.") from exc
+
+
+def client_from_settings(settings) -> GeminiClient | None:
+    """Gemini from GEMINI_API_KEY and GEMINI_MODEL, or None when no key is set."""
+    key = settings.gemini_api_key.get_secret_value()
+    return GeminiClient(key, settings.gemini_model) if key else None

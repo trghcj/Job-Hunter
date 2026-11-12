@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Cover letter · JobHunter{% endblock %}
+{% block body %}
+<p class="back"><a href="/">← My jobs</a></p>
+<h1>Cover letter</h1>
+<p class="lede">
+  {% set link = view.url|safe_url %}
+  {% if link %}<a href="{{ link }}" target="_blank" rel="noopener noreferrer">{{ view.title }}</a>
+  {% else %}{{ view.title }}{% endif %} · {{ view.company }}
+</p>
+
+{% if error %}<div class="msg bad" role="alert">{{ error }}</div>{% endif %}
+
+{% if not view.has_profile %}
+<div class="card empty">
+  <p>Upload your resume on Settings first.</p>
+  <p><a href="/settings#profile">Go to My profile</a></p>
+</div>
+{% else %}
+<div class="msg info">AI can make mistakes. Check every fact before you send it.</div>
+
+{% set d = view.draft %}
+{% if not d %}
+<div class="card">
+  <p>Gemini will write a 200–250 word cover letter and a few resume tips for this job from
+    your profile. Your name and contact details are not sent.</p>
+  <form method="post" action="/jobs/{{ job_id }}/draft" class="busy-on-submit">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button type="submit">Write draft</button>
+  </form>
+</div>
+{% else %}
+<div class="card">
+  <form method="post" action="/jobs/{{ job_id }}/draft/letter">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="letter">Your letter <span class="hint">· edit it, then save</span></label>
+    <textarea id="letter" name="letter" class="draft-letter" maxlength="6000">{{ d.letter }}</textarea>
+    <div class="actions draft-actions">
+      <button type="submit">Save edits</button>
+      <button type="button" class="secondary" data-copy="letter">Copy</button>
+    </div>
+  </form>
+  <p class="hint">Made at {{ d.created_at|ist("%d %b %Y, %I:%M %p") }} IST{% if d.updated_at != d.created_at %} · edited {{ d.updated_at|ist("%d %b, %I:%M %p") }} IST{% endif %}</p>
+</div>
+
+<div class="card">
+  <h2>Resume tips for this job</h2>
+  {% if d.tips %}
+  <ol class="tips">{% for tip in d.tips %}<li>{{ tip }}</li>{% endfor %}</ol>
+  {% else %}
+  <p class="hint">No tips this time.</p>
+  {% endif %}
+</div>
+
+<form method="post" action="/jobs/{{ job_id }}/draft" class="busy-on-submit"
+      data-confirm="Replace this draft and your edits?">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <button type="submit" class="secondary">Redo</button>
+  <span class="hint">Writes a fresh draft (up to 10 a day).</span>
+</form>
+{% endif %}
+{% endif %}
+<script src="/static/draft.js"></script>
+{% endblock %}
