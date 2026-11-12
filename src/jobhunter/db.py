@@ -174,6 +174,31 @@ class LlmUsage(Base):
     calls: Mapped[int | None] = mapped_column(Integer, server_default="0")
 
 
+class DraftRow(Base):
+    """The latest cover letter and resume tips one user made for one job (Phase 6)."""
+
+    __tablename__ = "drafts"
+
+    user_id: Mapped[int] = _user_id(primary_key=True)
+    job_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True
+    )
+    letter: Mapped[str] = mapped_column(Text)
+    tips: Mapped[list] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class DraftUsage(Base):
+    """Drafts attempted per user per IST day, for the daily limit."""
+
+    __tablename__ = "draft_usage"
+
+    user_id: Mapped[int] = _user_id(primary_key=True)
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    calls: Mapped[int] = mapped_column(Integer, server_default="0")
+
+
 class ApiUsage(Base):
     """Calls per day per rate-limited API, so runs stop before free-tier caps."""
 
