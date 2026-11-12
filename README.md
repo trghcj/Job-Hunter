@@ -145,7 +145,7 @@ data/                  default company watchlist, seeded into the database once
 | `ADMIN_EMAILS` | Optional. Comma-separated Google emails that also get the **Admin** page (users, blocking, sources, watchlist). Nobody can block the owner. |
 | `SESSION_SECRET` | 32+ random characters: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
 | `ALERT_TO` (optional) | Where failure alerts go, so they still arrive if the database is down. |
-| `GEMINI_API_KEY` | Optional, for the Gemini review: [aistudio.google.com](https://aistudio.google.com) → *Get API key* (free tier). Needed in `.env` and GitHub Actions for the daily review, and on Render for cover letter drafts. `GEMINI_MODEL` defaults to `gemini-2.5-flash`. |
+| `GEMINI_API_KEY` | Optional, for the Gemini review: [aistudio.google.com](https://aistudio.google.com) → *Get API key* (free tier). Needed in `.env` and GitHub Actions for the daily review, and on Render for cover letter drafts. `GEMINI_MODEL` defaults to `gemini-3.1-flash-lite` (Google no longer gives new keys `gemini-2.5-flash`). |
 | `SETTINGS_KEY` | Encrypts the Gmail app password: `python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`. Use the same value locally, in GitHub Actions and on Render. |
 | `TEST_DATABASE_URL` (optional) | A **local** Postgres database for the database tests. Never the hosted one. |
 

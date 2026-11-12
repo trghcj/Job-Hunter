@@ -11,6 +11,7 @@ dependencies = [
     "httpx>=0.27",
     "pyyaml>=6",
     "cryptography>=42", # encrypts the Gmail app password saved on the settings page
+    "itsdangerous>=2.1", # signs the one-click links in the daily email (actions.py)
 ]
 
 [project.optional-dependencies]
@@ -20,7 +21,6 @@ web = [
     "uvicorn>=0.29",
     "jinja2>=3.1",
     "python-multipart>=0.0.9",
-    "itsdangerous>=2.1",
     "PyJWT[crypto]>=2.8",
     "pypdf>=4", # reads text from an uploaded resume; the PDF itself is never stored
 ]

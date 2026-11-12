@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     adzuna_app_key: SecretStr = SecretStr("")
     resend_api_key: SecretStr = SecretStr("")
     gemini_api_key: SecretStr = SecretStr("")
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.1-flash-lite"
     public_url: str = "https://jobhunter-settings.onrender.com"  # builds links in the email
     settings_key: SecretStr = SecretStr("")
     alert_to: str = ""  # optional; failure alerts still reach you when the database is down
