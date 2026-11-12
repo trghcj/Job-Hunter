@@ -335,11 +335,11 @@ def cmd_heartbeat(_: argparse.Namespace) -> int:
 
 def cmd_set_email(args: argparse.Namespace) -> int:
     """Temporary until the settings page: where the digest goes."""
-    from jobhunter.db import OWNER_PLACEHOLDER_ID
     from jobhunter.user_settings import set_user_setting
 
     with _session() as session:
-        set_user_setting(session, OWNER_PLACEHOLDER_ID, "digest_to", args.addresses)
+        set_user_setting(session, _owner_id(session), "digest_to", args.addresses)
+        session.commit()
     print(f"Digest will be sent to: {', '.join(args.addresses)}")
     return 0
 
