@@ -1,4 +1,5 @@
 from dataclasses import replace
+from datetime import UTC, datetime
 
 import pytest
 
@@ -6,12 +7,13 @@ pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from jobhunter.avoid import Avoid  # noqa: E402
+from jobhunter.drafts import JobNotFound, SavedDraft  # noqa: E402
 from jobhunter.mail_account import MailView  # noqa: E402
 from jobhunter.profile import ProfileError  # noqa: E402
 from jobhunter.web.actions_store import JobBrief  # noqa: E402
 from jobhunter.web.app import create_app  # noqa: E402
 from jobhunter.web.forms import ProfileForm  # noqa: E402
-from jobhunter.web.store import ProfileView, RunRow  # noqa: E402
+from jobhunter.web.store import DraftView, ProfileView, RunRow  # noqa: E402
 from tests.web_fakes import (  # noqa: E402
     FakeAccounts,
     FakeVerifier,
@@ -118,6 +120,33 @@ class FakeStore:
         if digest_fit not in ("strong", "good", "all"):
             raise ValueError("Pick how many jobs to email you.")
         self.profile = replace(self.profile, llm_review=llm_review, digest_fit=digest_fit)
+
+    # ---- cover letter drafts (jobs 1 and 2 are visible)
+    draft = None
+    draft_error = None
+    draft_calls: list = []
+    letters: list = []
+
+    def load_draft(self, job_id):
+        if job_id not in (1, 2):
+            return None
+        return DraftView("Backend Engineer", "Acme", "https://jobs.example.com/1",
+                         bool(self.profile.text), self.draft)
+
+    def make_draft(self, job_id, client):
+        self.draft_calls = self.draft_calls + [(job_id, client)]
+        if job_id not in (1, 2):
+            raise JobNotFound("Job not found.")
+        if self.draft_error:
+            raise self.draft_error
+        now = datetime(2026, 11, 13, 6, 0, tzinfo=UTC)
+        self.draft = SavedDraft("Dear <b>team</b>", ("Tip one",), now, now)
+
+    def save_letter(self, job_id, letter):
+        if job_id not in (1, 2) or self.draft is None:
+            return False
+        self.letters = self.letters + [(job_id, letter)]
+        return True
 
 
 @pytest.fixture

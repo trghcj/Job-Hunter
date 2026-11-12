@@ -68,6 +68,10 @@ After **Not interested** you can pick an optional reason:
 
 Lowered jobs say why ("Lowered: you avoid AWS"). Everything is listed under **Settings → Hidden and lowered**, where **Remove** undoes it. Links point to `PUBLIC_URL` (default `https://jobhunter-settings.onrender.com`).
 
+### Cover letter and resume tips
+
+Every job on My jobs has a **Draft** link. On its page, **Write draft** asks Gemini for a 200–250 word cover letter and 3–5 resume tips for that job, from your profile text (without contact details or its first line, so the letter ends with *[Your name]* for you to fill in). Gemini is told to use only facts from your profile and to treat the job ad as untrusted text; its answer is checked and shown as plain text. Edit the letter and **Save edits**, or **Copy** it. The latest draft per job is kept, with your edits; **Redo** writes a fresh one after asking first. Each person can make 10 drafts a day (India time); a failed attempt counts too, and a failure never touches the saved draft. Nothing is sent unless you click Write draft or Redo. Needs `GEMINI_API_KEY` on Render.
+
 ### Sources
 
 | Source | How it is read | Notes |
@@ -141,7 +145,7 @@ data/                  default company watchlist, seeded into the database once
 | `ADMIN_EMAILS` | Optional. Comma-separated Google emails that also get the **Admin** page (users, blocking, sources, watchlist). Nobody can block the owner. |
 | `SESSION_SECRET` | 32+ random characters: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
 | `ALERT_TO` (optional) | Where failure alerts go, so they still arrive if the database is down. |
-| `GEMINI_API_KEY` | Optional, for the Gemini review: [aistudio.google.com](https://aistudio.google.com) → *Get API key* (free tier). Needed only in `.env` and GitHub Actions, not on Render. `GEMINI_MODEL` defaults to `gemini-2.5-flash`. |
+| `GEMINI_API_KEY` | Optional, for the Gemini review: [aistudio.google.com](https://aistudio.google.com) → *Get API key* (free tier). Needed in `.env` and GitHub Actions for the daily review, and on Render for cover letter drafts. `GEMINI_MODEL` defaults to `gemini-2.5-flash`. |
 | `SETTINGS_KEY` | Encrypts the Gmail app password: `python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`. Use the same value locally, in GitHub Actions and on Render. |
 | `TEST_DATABASE_URL` (optional) | A **local** Postgres database for the database tests. Never the hosted one. |
 
@@ -226,7 +230,7 @@ Tests make no network calls: API responses are replayed from `tests/fixtures/`, 
 - Secrets live only in `.env`, GitHub Actions secrets and Render. Error messages and alert emails never contain API keys, URLs with keys, or database passwords.
 - LinkedIn and Naukri accounts are never logged into or automated, and their sites are never scraped. Their jobs come only from their own alert emails in your Gmail.
 - The Gmail app password is stored encrypted and is never shown, logged or put in an error message.
-- Only cleaned resume text is stored (no email, phone or links); the uploaded PDF is never stored or logged. Gemini sees it only for users who turn the review on, without its first line.
+- Only cleaned resume text is stored (no email, phone or links); the uploaded PDF is never stored or logged. Gemini sees it, without its first line, only for users who turn the review on or click Write draft for a job.
 
 ## Roadmap
 
@@ -240,4 +244,4 @@ Tests make no network calls: API responses are replayed from `tests/fixtures/`, 
 | B | Done | Chrome bubble extension: on the job you open on LinkedIn, Naukri, Indeed or a careers site (no automatic browsing), shows whether it matches your filters, saves it to My jobs, lists your latest matches and marks jobs you have seen |
 | 4 | Done | Fit score from your resume (skills and title), Strong/Good/Weak levels with reasons, digest fit choice, optional Gemini review of your top 10 a day |
 | 5 | Done | One-click Save / Applied / Not interested links in the email; optional reasons hide or lower similar jobs, undoable on Settings |
-| 6 | Planned | Optional resume and cover-letter drafts (the job list and status pages arrived with accounts) |
+| 6 | Done | Cover letter (editable, 200–250 words) and resume tips per job from Gemini, on request, 10 a day |

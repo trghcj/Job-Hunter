@@ -29,6 +29,8 @@ services:
         sync: false
       - key: ADMIN_EMAILS # optional, comma-separated: these accounts also get Admin
         sync: false
+      - key: GEMINI_API_KEY # optional: cover letter drafts (Phase 6); same key as .env
+        sync: false
       - key: FIREBASE_API_KEY # the four public values from Firebase > Project settings
         sync: false
       - key: FIREBASE_AUTH_DOMAIN

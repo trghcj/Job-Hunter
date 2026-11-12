@@ -186,3 +186,10 @@ label.check input { width: 18px; height: 18px; accent-color: var(--accent); }
 .avoid-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px;
   padding: 6px 0; border-bottom: 1px solid var(--border); }
 .avoid-list form { margin: 0; }
+
+/* Cover letter and resume tips (Phase 6) */
+.back { margin: 0 0 8px; font-size: 14px; }
+.draft-letter { min-height: 320px; max-height: 640px; font-size: 15px; }
+.draft-actions { margin-top: 12px; }
+.tips { margin: 0; padding-left: 22px; }
+.tips li { margin: 6px 0; }

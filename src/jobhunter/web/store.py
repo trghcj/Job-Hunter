@@ -11,12 +11,14 @@ from typing import Protocol
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from jobhunter import accounts, extension_tokens, profile
+from jobhunter import accounts, drafts, extension_tokens, profile
 from jobhunter import avoid as avoid_lists
 from jobhunter.avoid import Avoid
 from jobhunter.crypto import CryptoError
 from jobhunter.db import Job, Run, SearchProfile
+from jobhunter.drafts import SavedDraft
 from jobhunter.extension_tokens import TokenRow
+from jobhunter.llm.client import LLMClient
 from jobhunter.mail_account import MailView, delete_account, gmail_adapter, mail_view, save_account
 from jobhunter.matching.fit import LEVEL_MIN
 from jobhunter.pipeline import refilter_for_user, visible_to
@@ -50,6 +52,17 @@ def rescore_user(session: Session, user_id: int) -> None:
 class JobBrief:
     title: str
     company: str
+
+
+@dataclass(frozen=True)
+class DraftView:
+    """What the cover letter page shows for one job."""
+
+    title: str
+    company: str
+    url: str | None
+    has_profile: bool
+    draft: SavedDraft | None
 
 
 @dataclass(frozen=True)
@@ -92,6 +105,9 @@ class SettingsStore(Protocol):
     def save_profile_text(self, text: str) -> None: ...
     def upload_resume(self, data: bytes) -> None: ...
     def save_profile_options(self, llm_review: bool, digest_fit: str) -> None: ...
+    def load_draft(self, job_id: int) -> DraftView | None: ...
+    def make_draft(self, job_id: int, client: LLMClient) -> None: ...
+    def save_letter(self, job_id: int, letter: str) -> bool: ...
 
 
 def _active_profile(session: Session, user_id: int) -> SearchProfile:
@@ -160,6 +176,26 @@ class UserStore:
             if removed:
                 self._rescore(session)
             return removed
+
+    # ---- cover letter and resume tips (drafts.py)
+
+    def load_draft(self, job_id: int) -> DraftView | None:
+        """None when the job does not exist or this user may not see it."""
+        with self._sessions() as session:
+            job = self._visible_job(session, job_id)
+            if job is None:
+                return None
+            return DraftView(job.title, job.company, job.url,
+                             profile.load_profile(session, self.user_id) is not None,
+                             drafts.load_draft(session, self.user_id, job_id))
+
+    def make_draft(self, job_id: int, client: LLMClient) -> None:
+        with self._sessions() as session:
+            drafts.make_draft(session, self.user_id, job_id, client, datetime.now(UTC))
+
+    def save_letter(self, job_id: int, letter: str) -> bool:
+        with self._sessions() as session:
+            return drafts.save_letter(session, self.user_id, job_id, letter, datetime.now(UTC))
 
     def load_profile(self) -> ProfileView:
         with self._sessions() as session:

@@ -11,7 +11,7 @@ Daily run: GitHub Actions. LLM via an LLMClient interface (Gemini default).
 - One failing source or LLM call must never stop a run. Catch, log to the runs table, continue.
 - No network in tests. Use saved fixtures in tests/fixtures/.
 - User settings (titles, experience range, cities, Gmail) live in the database, per user, and are edited in the web UI. Never hard-code them or read them from files.
-- Users sign in with Google (Firebase ID tokens checked in web/firebase_auth.py). Who may sign in and who is admin come from OWNER_EMAIL, ALLOWED_EMAILS and ADMIN_EMAILS (accounts.Access); never hard-code email addresses. Every query on a per-user table (search_profiles, user_settings, mail_accounts, job_scores, job_status, job_owners) filters by user_id; jobs are shared, except private ones from a user's Gmail (pipeline.visible_to).
+- Users sign in with Google (Firebase ID tokens checked in web/firebase_auth.py). Who may sign in and who is admin come from OWNER_EMAIL, ALLOWED_EMAILS and ADMIN_EMAILS (accounts.Access); never hard-code email addresses. Every query on a per-user table (search_profiles, user_settings, mail_accounts, job_scores, job_status, job_owners, drafts, draft_usage) filters by user_id; jobs are shared, except private ones from a user's Gmail (pipeline.visible_to).
 - Never commit secrets. Read them from env via settings.py. Never print them.
 - Never automate a logged-in LinkedIn or Naukri account, and never scrape their sites
   (no browser impersonation). Their jobs come only from alert emails read from the user's
@@ -28,6 +28,9 @@ Daily run: GitHub Actions. LLM via an LLMClient interface (Gemini default).
 - Email action links (actions.py) are signed with a key derived from SETTINGS_KEY, expire
   after 30 days and act on one job for one user; GET /a/{token} never changes data (the page
   POSTs). Avoid lists (avoid.py) are per user and always visible and removable on Settings.
+- Drafts (drafts.py) are made only when the user clicks Write draft or Redo, at most 10
+  per user per IST day (failures count), from profile.for_llm text; replies are validated
+  (llm.client.parse_draft), shown only as plain text, and a failure keeps the old draft.
 - The Gmail app password is stored only encrypted (crypto.py, SETTINGS_KEY) and is never
   shown on a page, logged, or included in an error message.
 - Respect rate limits: Adzuna max 250 calls/day, Resend max 100 emails/day. Count calls in the database.

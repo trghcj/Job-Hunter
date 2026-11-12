@@ -18,12 +18,15 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, sessionmaker
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
 
 from jobhunter.accounts import Access, Identity, SignIn, email_set
 from jobhunter.actions import ACTIONS, Action, TokenInvalid, action_key, read_token
 from jobhunter.avoid import REASONS
+from jobhunter.drafts import FAILED, DraftError, JobNotFound
 from jobhunter.extension_tokens import label_from_user_agent
+from jobhunter.llm.client import LLMClient
 from jobhunter.notify.email_resend import IST
 from jobhunter.profile import MAX_PDF_BYTES, ProfileError
 from jobhunter.settings import Settings, get_settings
@@ -180,8 +183,14 @@ def create_app(
     accounts: AccountsGateway | None = None,
     settings: Settings | None = None,
     actions: ActionGateway | None = None,
+    draft_client: Callable[[], LLMClient | None] | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
+    if draft_client is None:
+        from jobhunter.llm.gemini import client_from_settings
+
+        def draft_client() -> LLMClient | None:
+            return client_from_settings(settings)
     secret = settings.session_secret.get_secret_value()
     if len(secret) < 32:
         raise RuntimeError("Set SESSION_SECRET (32+ random characters) to start.")
@@ -414,6 +423,49 @@ def create_app(
         store_factory(user.id).add_reason(job_id, str(data.get("reason", "")))
         return TEMPLATES.TemplateResponse(request, "action.html", {
             "mode": "reason", "heading": "Got it", "user": user})
+
+    # ---- cover letter and resume tips for one job (drafts.py)
+
+    def draft_page(request: Request, user: UserInfo, job_id: int, error: str | None = None):
+        view = store_factory(user.id).load_draft(job_id)
+        if view is None:
+            return Response("Job not found.", status_code=404)
+        return TEMPLATES.TemplateResponse(request, "draft.html", {
+            "user": user, "csrf": _csrf(request), "page": "jobs", "job_id": job_id,
+            "view": view, "error": error})
+
+    @app.get("/jobs/{job_id}/draft", response_class=HTMLResponse)
+    def draft_get(request: Request, job_id: int):
+        user, early = signed_in(request)
+        if early:
+            return early
+        return draft_page(request, user, job_id)
+
+    @app.post("/jobs/{job_id}/draft")
+    async def draft_write(request: Request, job_id: int):
+        user, _, early = await _checked_form(request)
+        if early:
+            return early
+        client = draft_client()
+        if client is None:
+            return draft_page(request, user, job_id, FAILED)
+        try:
+            # The AI call can take up to a minute: keep it off the event loop.
+            await run_in_threadpool(store_factory(user.id).make_draft, job_id, client)
+        except JobNotFound:
+            return Response("Job not found.", status_code=404)
+        except DraftError as exc:
+            return draft_page(request, user, job_id, str(exc))
+        return _see_other(f"/jobs/{job_id}/draft")
+
+    @app.post("/jobs/{job_id}/draft/letter")
+    async def draft_letter(request: Request, job_id: int):
+        user, data, early = await _checked_form(request)
+        if early:
+            return early
+        if not store_factory(user.id).save_letter(job_id, str(data.get("letter", ""))):
+            return Response("Draft not found.", status_code=404)
+        return _see_other(f"/jobs/{job_id}/draft")
 
     @app.post("/avoid/remove")
     async def remove_avoid(request: Request):
