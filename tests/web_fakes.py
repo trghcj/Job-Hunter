@@ -75,5 +75,8 @@ class NoJobs:
     def counts(self, user_id):
         return {"matches": 0, "saved": 0, "applied": 0}
 
+    def new_today(self, user_id):
+        return 0
+
     def set_status(self, user_id, job_id, status):
         return False

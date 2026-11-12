@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from jobhunter.db import Job, JobScore, JobStatus
 from jobhunter.matching.fit import LEVEL_MIN, level_of
-from jobhunter.pipeline import status_join, visible_to
+from jobhunter.pipeline import ist_day_start, status_join, visible_to
 from jobhunter.user_settings import get_user_setting
 
 Tab = Literal["matches", "saved", "applied"]
@@ -43,6 +43,7 @@ class JobsView(Protocol):
     def list(self, user_id: int, tab: str, limit: int = 100,
              fit: str | None = None) -> list[JobCard]: ...
     def counts(self, user_id: int) -> dict[str, int]: ...
+    def new_today(self, user_id: int) -> int: ...
     def set_status(self, user_id: int, job_id: int, status: str) -> bool: ...
 
 
@@ -99,6 +100,14 @@ class JobsStore:
             return {tab: session.scalar(select(func.count()).select_from(
                         _tab_query(session, user_id, tab).order_by(None).subquery())) or 0
                     for tab in TABS}
+
+    def new_today(self, user_id: int) -> int:
+        """Matches first seen since midnight India time (the greeting on My jobs)."""
+        with self._sessions() as session:
+            today = _tab_query(session, user_id, "matches").where(
+                Job.first_seen_at >= ist_day_start(datetime.now(UTC)))
+            return session.scalar(select(func.count()).select_from(
+                today.order_by(None).subquery())) or 0
 
     def set_status(self, user_id: int, job_id: int, status: str) -> bool:
         """False (nothing changed) for an unknown status or a job this user cannot see."""

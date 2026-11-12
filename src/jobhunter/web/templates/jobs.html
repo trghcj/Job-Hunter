@@ -1,9 +1,13 @@
 {% extends "base.html" %}
 {% block title %}My jobs · JobHunter{% endblock %}
 {% block body %}
-<h1>My jobs</h1>
-<p class="lede">Your best matches first. Save the ones you like, mark the ones you applied to,
-  hide the rest.</p>
+<header class="hello">
+  <h1>{{ hello }}</h1>
+  <p class="lede">
+    {% if new_today %}<span class="today">{{ new_today }} new {{ "match" if new_today == 1 else "matches" }} today</span>
+    {% else %}No new matches yet today{% endif %} · best fits first. Save the ones you like,
+    mark the ones you applied to, hide the rest.</p>
+</header>
 
 <nav class="tabs" aria-label="Job lists">
   {% for t in tabs %}
@@ -43,7 +47,7 @@
 {% endif %}
 
 {% for c in cards %}
-<article class="card job">
+<article class="card job{% if c.level %} fit-{{ c.level }}{% endif %}">
   <h2>
     {% set link = c.url|safe_url %}
     {% if link %}<a href="{{ link }}" target="_blank" rel="noopener noreferrer">{{ c.title }}</a>
@@ -57,7 +61,12 @@
   <p class="when">{{ c.status|capitalize }} {{ c.status_at|days_ago }}</p>
   {% endif %}
   {% if c.level %}
-  <p class="fit"><span class="badge fit-{{ c.level }}">{{ c.level|capitalize }} fit</span> {{ c.reason }}</p>
+  {% set pct = ((c.score or 0) * 100)|round|int %}
+  <div class="meter meter-{{ c.level }}" role="img" aria-label="{{ pct }}% match">
+    <span style="width: {{ [pct, 100]|min }}%"></span>
+  </div>
+  <p class="fit"><span class="badge fit-{{ c.level }}">{{ c.level|capitalize }} fit</span>
+    <span class="pct">{{ pct }}% match</span> · {{ c.reason }}</p>
   {% endif %}
   <div class="actions">
     {% for value, label in (("saved", "Save"), ("applied", "Applied")) %}
