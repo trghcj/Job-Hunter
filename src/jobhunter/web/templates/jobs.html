@@ -7,9 +7,17 @@
 
 <nav class="tabs" aria-label="Job lists">
   {% for t in tabs %}
-  <a href="/?tab={{ t }}" {% if t == tab %}aria-current="page" class="current"{% endif %}>{{ t|capitalize }}</a>
+  <a href="/?tab={{ t }}" {% if t == tab %}aria-current="page" class="current"{% endif %}>{{ t|capitalize }} <span class="count">{{ counts[t] }}</span></a>
   {% endfor %}
 </nav>
+
+{% if tab == "matches" and has_profile %}
+<nav class="chips" aria-label="Filter by fit">
+  {% for value, label in ((None, "All"), ("strong", "Strong fit"), ("good", "Good fit & up")) %}
+  <a href="/?tab=matches{% if value %}&amp;fit={{ value }}{% endif %}"{% if fit == value %} aria-current="true"{% endif %}>{{ label }}</a>
+  {% endfor %}
+</nav>
+{% endif %}
 
 {% if tab == "matches" and not has_profile %}
 <div class="msg info">Upload your resume to rank jobs by fit. <a href="/settings#profile">Add it on Settings</a></div>
@@ -18,7 +26,10 @@
 {% if not cards %}
 <div class="card empty">
   <img src="/static/logo.svg" alt="" width="56" height="56">
-  {% if tab == "matches" %}
+  {% if tab == "matches" and fit %}
+  <h2>No {{ fit }} fits right now</h2>
+  <p>New jobs arrive with each daily run. <a href="/?tab=matches">Show all matches</a></p>
+  {% elif tab == "matches" %}
   <h2>No matches yet</h2>
   <p>Add the job titles you want on Settings. New matches arrive after the next daily run
     (about 7:45 AM IST).</p>
@@ -42,6 +53,9 @@
     {% if c.work_mode != "unknown" %} · {{ c.work_mode }}{% endif %}
     · {{ c.source }}{% if c.posted_at %} · posted {{ c.posted_at | ist("%d %b") }}{% endif %}
     {% if c.status in ("saved", "applied") %}<span class="badge">{{ c.status }}</span>{% endif %}</p>
+  {% if c.status_at and c.status in ("saved", "applied") and tab != "matches" %}
+  <p class="when">{{ c.status|capitalize }} {{ c.status_at|days_ago }}</p>
+  {% endif %}
   {% if c.level %}
   <p class="fit"><span class="badge fit-{{ c.level }}">{{ c.level|capitalize }} fit</span> {{ c.reason }}</p>
   {% endif %}

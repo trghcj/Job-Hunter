@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   run:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinned so a GitHub OS upgrade cannot break the daily run
     timeout-minutes: 30 # a full run reads ~125 careers sites and takes about 10 minutes
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}

@@ -197,3 +197,16 @@ label.check input { width: 18px; height: 18px; accent-color: var(--accent); }
 /* Send the digest from your own Gmail */
 .send-digest { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
 .send-digest .hint { margin: 4px 0 10px; }
+
+/* My jobs: counts on tabs, fit chips, when you saved / applied */
+.tabs .count { display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px;
+  border-radius: 999px; font-size: 12px; line-height: 18px; text-align: center;
+  background: color-mix(in srgb, var(--muted) 16%, transparent); }
+.tabs a.current .count { background: color-mix(in srgb, var(--accent-ink) 14%, transparent); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin: -6px 0 18px; }
+.chips a { font-size: 14px; font-weight: 600; text-decoration: none; color: var(--muted);
+  padding: 4px 12px; border-radius: 999px; border: 1px dashed var(--border); }
+.chips a:hover { color: var(--ink); border-color: var(--accent); }
+.chips a[aria-current="true"] { color: var(--ink); border-style: solid; border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.when { font-size: 13px; color: var(--ok); font-weight: 600; margin: -8px 0 10px; }

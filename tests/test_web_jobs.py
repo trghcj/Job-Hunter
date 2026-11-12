@@ -1,6 +1,7 @@
 """My jobs page routes, with fake stores."""
 
-from datetime import UTC, datetime
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -23,10 +24,15 @@ class FakeJobs:
         self.cards = {"matches": [card(1), card(2, "AI Engineer")], "saved": [], "applied": []}
         self.changes = []
         self.asked = []
+        self.fits = []
 
-    def list(self, user_id, tab, limit=100):
+    def list(self, user_id, tab, limit=100, fit=None):
         self.asked.append((user_id, tab))
+        self.fits.append(fit)
         return self.cards[tab]
+
+    def counts(self, user_id):
+        return {tab: len(cards) for tab, cards in self.cards.items()}
 
     def set_status(self, user_id, job_id, status):
         if job_id not in (1, 2) or status not in ("new", "saved", "applied", "hidden"):
@@ -134,3 +140,67 @@ def test_matches_show_level_and_reason(jobs):
 def test_matches_hint_without_profile(client):
     sign_in(client)
     assert "Upload your resume to rank jobs by fit." in client.get("/").text
+
+
+# ---- tab counts, fit chips and when you saved / applied
+
+def test_tabs_show_counts(client, jobs):
+    jobs.cards["saved"] = [card(3, status="saved")]
+    sign_in(client)
+    page = client.get("/").text
+    assert '<span class="count">2</span>' in page and '<span class="count">1</span>' in page
+    assert '<span class="count">0</span>' in page
+
+
+def test_fit_chips_on_matches(client, jobs, monkeypatch):
+    monkeypatch.setattr(FakeStore, "profile", replace(FakeStore.profile, text="Python"))
+    sign_in(client)
+    page = client.get("/").text
+    assert 'href="/?tab=matches&amp;fit=strong"' in page
+    assert 'href="/?tab=matches&amp;fit=good"' in page
+    assert jobs.fits[-1] is None
+    page = client.get("/?fit=strong").text
+    assert jobs.fits[-1] == "strong" and 'aria-current="true"' in page
+    client.get("/?fit=bogus")
+    assert jobs.fits[-1] is None
+    assert "fit=strong" not in client.get("/?tab=saved").text
+
+
+def test_fit_chip_empty_state(client, jobs):
+    jobs.cards["matches"] = []
+    sign_in(client)
+    page = client.get("/?fit=strong").text
+    assert "No strong fits right now" in page and 'href="/?tab=matches"' in page
+
+
+def test_saved_and_applied_show_when(client, jobs):
+    now = datetime.now(UTC)
+    jobs.cards["applied"] = [replace(card(1, status="applied"), status_at=now - timedelta(days=3))]
+    jobs.cards["saved"] = [replace(card(2, status="saved"), status_at=now),
+                           replace(card(4, status="saved"), status_at=now - timedelta(days=1))]
+    sign_in(client)
+    assert "Applied 3 days ago" in client.get("/?tab=applied").text
+    page = client.get("/?tab=saved").text
+    assert "Saved today" in page and "Saved yesterday" in page
+
+
+def test_no_fit_chips_without_resume(client):
+    sign_in(client)
+    assert "fit=strong" not in client.get("/").text
+
+
+def test_fit_chip_label_escaped_once(client, monkeypatch):
+    monkeypatch.setattr(FakeStore, "profile", replace(FakeStore.profile, text="Python"))
+    sign_in(client)
+    page = client.get("/").text
+    assert "Good fit &amp; up" in page and "&amp;amp;" not in page
+
+
+def test_days_ago_uses_india_dates():
+    from jobhunter.web.app import days_ago
+
+    now = datetime(2026, 11, 14, 3, 0, tzinfo=UTC)                              # 8:30 AM IST
+    assert days_ago(datetime(2026, 11, 13, 18, 40, tzinfo=UTC), now) == "today"      # 00:10 IST
+    assert days_ago(datetime(2026, 11, 13, 18, 0, tzinfo=UTC), now) == "yesterday"   # 23:30 IST
+    assert days_ago(datetime(2026, 11, 10, 6, 0, tzinfo=UTC), now) == "4 days ago"
+    assert days_ago(None, now) == ""
