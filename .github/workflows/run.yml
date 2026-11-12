@@ -5,6 +5,8 @@ on:
     # GitHub may delay or even drop scheduled runs at busy times, especially at the top
     # of the hour. So: one main time off the hour, plus two backups. Every scheduled run
     # uses --once-per-day, so a backup does nothing if an earlier run already succeeded.
+    # Times are UTC (GitHub cron has no time zones). If no scheduled run ever appears under
+    # Actions, push any change to this file: that makes GitHub register the schedule again.
     - cron: "13 2 * * *" # 02:13 UTC = 7:43 AM IST (main)
     - cron: "43 3 * * *" # 03:43 UTC = 9:13 AM IST (backup)
     - cron: "13 6 * * *" # 06:13 UTC = 11:43 AM IST (backup)
