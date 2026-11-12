@@ -31,6 +31,16 @@ _DOMAIN = re.compile(
     re.IGNORECASE)
 _PHONE_LIKE = re.compile(r"\+?\(?\d[\d\s().-]{6,}\d")
 _MIN_PHONE_DIGITS = 10  # "2019 - 2023" (8 digits) is a date range, not a phone number
+# A line left with only link labels once the links are gone: "| |LinkedIn |GitHub |Portfolio".
+_LABELS_ONLY = re.compile(
+    r"[\s|•·,/–-]*(?:(?:linkedin|github|gitlab|portfolio|website|web|email|e-mail|mail|phone|"
+    r"mobile|tel|leetcode|codeforces|codechef|hackerrank|kaggle|twitter|x|blog|medium|"
+    r"behance|dribbble|resume)[\s|•·,/:–-]*)*", re.IGNORECASE)
+
+
+def _drop_label_lines(text: str) -> str:
+    return "\n".join(line for line in text.split("\n")
+                     if not (line.strip() and _LABELS_ONLY.fullmatch(line)))
 
 
 class ProfileError(ValueError):
@@ -54,6 +64,7 @@ def clean_text(text: str) -> str:
     text = _URL.sub("", text)
     text = _DOMAIN.sub("", text)
     text = _PHONE_LIKE.sub(_drop_phone, text)
+    text = _drop_label_lines(text)
     text = re.sub(r"[ \t\f\v]+", " ", text)
     text = re.sub(r" *\n *", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text)

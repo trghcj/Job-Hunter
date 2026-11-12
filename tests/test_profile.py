@@ -109,3 +109,11 @@ def test_flags_default(db_session):
     a = _user(db_session, 1)
     assert get_flag(db_session, a) is False
     assert digest_fit(db_session, a) == "good"
+
+
+def test_clean_text_drops_leftover_link_labels():
+    text = ("Asha Verma\n| |LinkedIn |GitHub |Portfolio\nEmail · Phone\nEDUCATION\n"
+            "Built a GitHub bot in Python")
+    out = clean_text(text)
+    assert "LinkedIn" not in out and "Portfolio" not in out and "Email · Phone" not in out
+    assert out.splitlines() == ["Asha Verma", "EDUCATION", "Built a GitHub bot in Python"]

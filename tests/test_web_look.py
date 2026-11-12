@@ -83,3 +83,10 @@ def test_pages_use_base_layout(client, path):
 def test_login_page_uses_layout_without_user_menu(client):
     page = client.get("/login").text
     assert 'class="topbar"' in page and "Sign out" not in page
+
+
+def test_text_boxes_have_no_resize_handle_and_file_button_is_styled():
+    css = (STATIC / "app.css").read_text(encoding="utf-8")
+    assert "resize: vertical" not in css and "resize: none" in css
+    assert "::file-selector-button" in css
+    assert "scrollbar-color" in css
