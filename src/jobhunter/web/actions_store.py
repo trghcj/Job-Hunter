@@ -4,8 +4,6 @@ A link only acts when its user still exists, is not blocked, is still invited, a
 the job. It uses the same status change as My jobs.
 """
 
-from dataclasses import dataclass
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -15,13 +13,9 @@ from jobhunter.db import Job, User
 from jobhunter.pipeline import visible_to
 from jobhunter.profile import load_profile
 from jobhunter.web.jobs_store import JobsStore
-from jobhunter.web.store import rescore_user
+from jobhunter.web.store import JobBrief, rescore_user
 
-
-@dataclass(frozen=True)
-class JobBrief:
-    title: str
-    company: str
+__all__ = ["DbActions", "JobBrief"]
 
 
 class DbActions:

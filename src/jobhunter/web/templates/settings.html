@@ -105,6 +105,32 @@
   </form>
 </div>
 
+<div class="card" id="avoid">
+  <h2>Hidden and lowered</h2>
+  <p class="hint">From the reasons you gave for "Not interested". Hidden companies and cities are left out of your matches; lowered skills and roles rank lower. Remove anything to undo it.</p>
+  {% if avoid.is_empty() %}
+  <p class="hint">Nothing hidden or lowered yet.</p>
+  {% else %}
+  {% for kind, label in avoid_groups %}
+  {% set values = avoid[kind] %}
+  {% if values %}
+  <h3 class="avoid-head">{{ label }}</h3>
+  <ul class="avoid-list">
+    {% for v in values %}
+    <li><span>{{ v }}</span>
+      <form method="post" action="/avoid/remove">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="kind" value="{{ kind }}">
+        <input type="hidden" name="value" value="{{ v }}">
+        <button class="link" type="submit">Remove</button>
+      </form></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% endfor %}
+  {% endif %}
+</div>
+
 <div class="card" id="extension">
   <h2>Chrome extension</h2>
   <p class="hint">The JobHunter bubble checks the job you have open on LinkedIn, Naukri, Indeed or a company careers page against your filters, and saves it to My jobs.</p>

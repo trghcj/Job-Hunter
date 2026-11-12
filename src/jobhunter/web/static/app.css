@@ -164,3 +164,11 @@ td form { margin: 0; }
 .upload { margin-bottom: 18px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
 label.check { display: flex; gap: 8px; align-items: center; font-weight: 600; }
 label.check input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+/* Not interested reasons (Phase 5) */
+.reasons { margin: 8px 0 14px; }
+.avoid-head { font-size: 14px; margin: 14px 0 4px; color: var(--muted); }
+.avoid-list { list-style: none; padding: 0; margin: 0; }
+.avoid-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 6px 0; border-bottom: 1px solid var(--border); }
+.avoid-list form { margin: 0; }

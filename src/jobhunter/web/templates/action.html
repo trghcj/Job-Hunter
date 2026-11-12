@@ -19,7 +19,8 @@
   <p>Want fewer jobs like this? Pick a reason (optional):</p>
   <div class="actions reasons">
     {% for key, label in reasons %}
-    <form method="post" action="/a/{{ token }}/reason">
+    <form method="post" action="{{ reason_url }}">
+      {% if csrf %}<input type="hidden" name="csrf" value="{{ csrf }}">{% endif %}
       <input type="hidden" name="reason" value="{{ key }}">
       <button type="submit" class="secondary">{{ label }}</button>
     </form>

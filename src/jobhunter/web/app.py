@@ -55,6 +55,8 @@ def ist(value: datetime | None, fmt: str, missing: str = "") -> str:
 
 TEMPLATES.env.filters["ist"] = ist
 SESSION_DAYS = 30
+AVOID_GROUPS = (("companies", "Hidden companies"), ("cities", "Hidden cities"),
+                ("skills", "Lowered skills"), ("titles", "Lowered roles"))
 LINK_EXPIRED = "This link has expired, open My jobs instead."
 ACTION_DONE = {"save": "Saved ✓", "applied": "Marked as applied ✓",
                "not_interested": "Hidden ✓"}
@@ -288,7 +290,7 @@ def create_app(
         if link.action == "not_interested":
             reasons = [(r, REASONS[r]) for r in actions.reasons_for(link.user_id, link.job_id)]
         return action_page(request, "done", heading=ACTION_DONE[link.action], job=job,
-                           token=token, reasons=reasons)
+                           reason_url=f"/a/{token}/reason", reasons=reasons)
 
     @app.post("/a/{token}/reason")
     async def action_reason(request: Request, token: str):
@@ -387,6 +389,41 @@ def create_app(
         tab = str(data.get("tab", "matches"))
         return _see_other(f"/?tab={tab if tab in TABS else 'matches'}")
 
+    # ---- "Not interested" on My jobs, with the same optional reasons as the email
+
+    @app.post("/jobs/{job_id}/not-interested")
+    async def not_interested(request: Request, job_id: int):
+        user, _, early = await _checked_form(request)
+        if early:
+            return early
+        if not jobs_store.set_status(user.id, job_id, "hidden"):
+            return Response("Job not found.", status_code=404)
+        job, reasons = store_factory(user.id).reasons_for(job_id)
+        if job is None:
+            return Response("Job not found.", status_code=404)
+        return TEMPLATES.TemplateResponse(request, "action.html", {
+            "mode": "done", "heading": ACTION_DONE["not_interested"], "job": job,
+            "user": user, "csrf": _csrf(request), "reason_url": f"/jobs/{job_id}/reason",
+            "reasons": [(r, REASONS[r]) for r in reasons]})
+
+    @app.post("/jobs/{job_id}/reason")
+    async def job_reason(request: Request, job_id: int):
+        user, data, early = await _checked_form(request)
+        if early:
+            return early
+        store_factory(user.id).add_reason(job_id, str(data.get("reason", "")))
+        return TEMPLATES.TemplateResponse(request, "action.html", {
+            "mode": "reason", "heading": "Got it", "user": user})
+
+    @app.post("/avoid/remove")
+    async def remove_avoid(request: Request):
+        user, data, early = await _checked_form(request)
+        if early:
+            return early
+        store_factory(user.id).remove_avoid(str(data.get("kind", "")),
+                                            str(data.get("value", "")))
+        return _see_other("/settings#avoid")
+
     # ---- settings (per user)
 
     def render_settings(request: Request, user: UserInfo, store: SettingsStore, form,
@@ -410,6 +447,8 @@ def create_app(
             "profile_errors": list(profile_errors),
             "profile_message": profile_message,
             "fit_choices": FIT_CHOICES,
+            "avoid": store.load_avoid(),
+            "avoid_groups": AVOID_GROUPS,
         }
         return TEMPLATES.TemplateResponse(request, "settings.html", ctx, status_code=status)
 
