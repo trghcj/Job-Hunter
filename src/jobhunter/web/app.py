@@ -18,6 +18,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, sessionmaker
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
 
 from jobhunter.accounts import Access, Identity, SignIn, email_set
@@ -449,7 +450,8 @@ def create_app(
         if client is None:
             return draft_page(request, user, job_id, FAILED)
         try:
-            store_factory(user.id).make_draft(job_id, client)
+            # The AI call can take up to a minute: keep it off the event loop.
+            await run_in_threadpool(store_factory(user.id).make_draft, job_id, client)
         except JobNotFound:
             return Response("Job not found.", status_code=404)
         except DraftError as exc:

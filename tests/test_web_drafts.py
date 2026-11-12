@@ -135,3 +135,23 @@ def test_draft_routes_need_csrf_and_sign_in(client, store):
     for path, data in routes:
         assert client.post(path, data={"csrf": "wrong", **data}).status_code == 403
     assert store.draft_calls == [] and store.letters == []
+
+
+def test_ai_call_runs_off_the_event_loop(client, store):
+    """A slow Gemini call must not freeze the site for everyone else."""
+    import asyncio
+
+    seen = {}
+    original = store.make_draft
+
+    def make_draft(job_id, ai):
+        try:
+            asyncio.get_running_loop()
+            seen["on_loop"] = True
+        except RuntimeError:
+            seen["on_loop"] = False
+        return original(job_id, ai)
+
+    store.make_draft = make_draft
+    sign_in(client)
+    assert write(client).status_code == 303 and seen == {"on_loop": False}
