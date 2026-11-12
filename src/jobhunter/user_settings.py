@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from jobhunter.db import OWNER_PLACEHOLDER_ID, AppSetting, SearchProfile, User, UserSetting
+from jobhunter.db import AppSetting, SearchProfile, User, UserSetting
 from jobhunter.sources.base import Search
 
 log = logging.getLogger(__name__)
@@ -58,15 +58,24 @@ USER_KEYS = ("digest", "digest_to", "max_age_days", "profile", "llm_review", "di
              "avoid")
 
 
+def _owner_id(session: Session) -> int | None:
+    """The owner (the placeholder until claimed, or after make-owner the real account)."""
+    found = session.scalars(select(User.id).where(User.is_owner.is_(True)).order_by(User.id))
+    return found.first()
+
+
 def seed_defaults(session: Session, path: Path = DEFAULT_CONFIG) -> None:
     """Insert defaults that are missing. Never overwrites what anyone has saved.
     Shared settings go to app_settings; config.yaml's personal ones go to the owner."""
     profile, settings = load_defaults(path)
-    if session.get(User, OWNER_PLACEHOLDER_ID) is not None:
-        seed_user(session, OWNER_PLACEHOLDER_ID, profile)
+    owner = _owner_id(session)
+    if owner is not None:
+        seed_user(session, owner, profile)
     for key, value in settings.items():
         if key in USER_KEYS:
-            stmt = insert(UserSetting).values(user_id=OWNER_PLACEHOLDER_ID, key=key, value=value)
+            if owner is None:
+                continue  # no owner yet: nobody to give personal defaults to
+            stmt = insert(UserSetting).values(user_id=owner, key=key, value=value)
         else:
             stmt = insert(AppSetting).values(key=key, value=value)
         session.execute(stmt.on_conflict_do_nothing())

@@ -143,3 +143,39 @@ def test_cli_preview_then_apply(db_session, monkeypatch, capsys):
     db_session.expire_all()
     assert db_session.get(User, 1) is None
     assert cli.main(["make-owner"]) == 1  # nothing left to fix
+
+
+def test_seed_defaults_works_after_make_owner(db_session):
+    """`migrate` (seed_defaults) runs on every deploy and daily run: it must give the
+    owner's personal defaults to the real owner once the placeholder is gone."""
+    from jobhunter.user_settings import seed_defaults
+
+    mine = setup(db_session)
+    make_owner(db_session, OWNER, apply=True)
+    seed_defaults(db_session)  # used to fail: user 1 no longer exists
+    db_session.expire_all()
+    assert get_user_setting(db_session, mine, "digest_to") == ["new@example.com"]  # kept
+    assert get_user_setting(db_session, mine, "digest") is not None  # missing one filled
+    assert db_session.get(User, 1) is None
+
+
+def test_seed_defaults_without_any_owner(db_session):
+    from jobhunter.user_settings import seed_defaults
+
+    db_session.delete(db_session.get(User, 1))
+    db_session.commit()
+    seed_defaults(db_session)  # nobody to give personal defaults to: skipped
+    assert db_session.scalars(select(UserSetting)).all() == []
+
+
+def test_set_email_command_after_make_owner(db_session, monkeypatch):
+    import contextlib
+
+    import jobhunter.__main__ as cli
+
+    mine = setup(db_session)
+    make_owner(db_session, OWNER, apply=True)
+    monkeypatch.setattr(cli, "_session", lambda: contextlib.nullcontext(db_session))
+    assert cli.main(["set-email", "me@example.com"]) == 0
+    db_session.expire_all()
+    assert get_user_setting(db_session, mine, "digest_to") == ["me@example.com"]
